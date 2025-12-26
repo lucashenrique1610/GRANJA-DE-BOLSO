@@ -1,6 +1,6 @@
 {
   "regions": ["gru1"],
   "framework": "nextjs",
-  "buildCommand": "next build",
-  "installCommand": "npm install"
+  "buildCommand": "npm run build",
+  "installCommand": "pnpm install"
 }
