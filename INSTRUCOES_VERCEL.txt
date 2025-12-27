@@ -1,0 +1,35 @@
+PARA CORRIGIR O ERRO NA VERCEL:
+
+O arquivo .env.local NÃO é enviado para a Vercel por segurança.
+Você precisa adicionar essas variáveis manualmente no painel da Vercel.
+
+1. Acesse seu projeto no site da Vercel.
+2. Vá em "Settings" (Configurações) > "Environment Variables" (Variáveis de Ambiente).
+3. Adicione as variáveis abaixo:
+
+-------------------------------------------------------------------------
+[CONFIGURAÇÃO DO SUPABASE - BANCO DE DADOS]
+
+Nome (Key): NEXT_PUBLIC_SUPABASE_URL
+Valor (Value): https://ftcwktgdedxjsalysdis.supabase.co
+
+-------------------------------------------------------------------------
+
+Nome (Key): NEXT_PUBLIC_SUPABASE_ANON_KEY
+Valor (Value): eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0Y3drdGdkZWR4anNhbHlzZGlzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzMDQ2MjAsImV4cCI6MjA4MDg4MDYyMH0.AHNgI47Q71fnoopDl9uqQbQL47TwMBf_xnChHINxo9s
+
+-------------------------------------------------------------------------
+
+Nome (Key): SUPABASE_SERVICE_ROLE_KEY
+Valor (Value): eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0Y3drdGdkZWR4anNhbHlzZGlzIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTMwNDYyMCwiZXhwIjoyMDgwODgwNjIwfQ.ei8cTA26wr-AT7V5nYQUt4MNn4J0QLb7OMc8nYxT2LI
+
+-------------------------------------------------------------------------
+[CONFIGURAÇÃO DE PAGAMENTO - MERCADO PAGO]
+(Opcional: Adicione apenas se for receber pagamentos reais ou de teste)
+
+Nome (Key): MERCADOPAGO_ACCESS_TOKEN
+Valor (Value): Cole aqui seu Access Token de Produção ou Teste do Mercado Pago
+
+-------------------------------------------------------------------------
+
+4. Após adicionar as variáveis, vá na aba "Deployments" e clique em "Redeploy" no último deploy.

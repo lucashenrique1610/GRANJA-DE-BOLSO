@@ -3,18 +3,28 @@ import { Preference } from "mercadopago"
 import { mercadopago } from "@/lib/mercadopago"
 
 export async function POST(req: Request) {
+  const requestId = crypto.randomUUID()
   try {
     if (!mercadopago) {
+      console.error(`[MP-PREF-${requestId}] Token não configurado`)
       return new NextResponse("Mercado Pago não configurado", { status: 500 })
     }
 
-    const { items, payer, external_reference, planId } = await req.json()
+    const body = await req.json()
+    const { items, payer, external_reference, planId } = body
+
+    console.log(`[MP-PREF-${requestId}] Criando preferência:`, {
+        email: payer?.email,
+        ref: external_reference,
+        plan: planId,
+        itemsCount: items?.length
+    })
 
     const preference = new Preference(mercadopago)
 
     const result = await preference.create({
       body: {
-        items: items, // [{ title: 'Assinatura', quantity: 1, unit_price: 100 }]
+        items: items, 
         payer: {
           email: payer.email,
           name: payer.name,
@@ -33,13 +43,18 @@ export async function POST(req: Request) {
       },
     })
 
+    console.log(`[MP-PREF-${requestId}] Preferência criada: ${result.id}`)
+
     return NextResponse.json({
       id: result.id,
       init_point: result.init_point,
       sandbox_init_point: result.sandbox_init_point,
     })
-  } catch (error) {
-    console.error("[MERCADOPAGO_PREFERENCE]", error)
+  } catch (error: any) {
+    console.error(`[MP-PREF-${requestId}] Erro:`, error)
+    if (error.cause) {
+        console.error(`[MP-PREF-${requestId}] Detalhes:`, JSON.stringify(error.cause, null, 2))
+    }
     return new NextResponse("Erro ao criar preferência", { status: 500 })
   }
 }

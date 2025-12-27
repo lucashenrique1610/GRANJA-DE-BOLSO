@@ -466,8 +466,29 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const plan = plans.find((p) => p.id === planId)
       if (!plan) throw new Error("Plano não encontrado")
 
-      const userDataStr = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("currentUser") : null
-      const user = userDataStr ? JSON.parse(userDataStr) : { email: "cliente@exemplo.com", id: "temp_user" }
+      // Tentar obter usuário da sessão (compatível com useAuth)
+      let user = { email: "", id: "", nome: "Cliente" }
+      try {
+        if (typeof localStorage !== "undefined") {
+            const sessionStr = localStorage.getItem("granja_session")
+            if (sessionStr) {
+                const session = JSON.parse(sessionStr)
+                if (session.user) {
+                    user = {
+                        email: session.user.email,
+                        id: session.user.id,
+                        nome: session.user.user_metadata?.nome || "Cliente"
+                    }
+                }
+            }
+        }
+      } catch (e) {
+        console.warn("Erro ao ler sessão local:", e)
+      }
+
+      if (!user.email || !user.id) {
+          throw new Error("Usuário não identificado. Faça login novamente.")
+      }
 
       const response = await fetch("/api/mercadopago/pix", {
         method: "POST",
@@ -476,11 +497,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           amount: plan.totalPrice,
           description: `Assinatura Plano ${plan.name}`,
           email: user.email,
-          userId: user.id || user.email,
+          userId: user.id,
+          planId: plan.id, // Adicionado planId que faltava
         }),
       })
 
-      if (!response.ok) throw new Error("Falha ao criar pagamento PIX")
+      if (!response.ok) {
+          const errData = await response.text()
+          throw new Error(`Falha ao criar pagamento PIX: ${errData}`)
+      }
 
       const data = await response.json()
       
@@ -507,7 +532,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       console.error("Erro no pagamento PIX:", error)
       toast({
         title: "Erro no pagamento",
-        description: "Não foi possível gerar o PIX. Tente novamente.",
+        description: "Não foi possível gerar o PIX. Verifique se você está logado.",
         variant: "destructive",
       })
       return null
@@ -522,8 +547,29 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const plan = plans.find((p) => p.id === planId)
       if (!plan) throw new Error("Plano não encontrado")
 
-      const userDataStr = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("currentUser") : null
-      const user = userDataStr ? JSON.parse(userDataStr) : { email: "cliente@exemplo.com", nome: "Cliente", id: "temp_user" }
+      // Tentar obter usuário da sessão
+      let user = { email: "", id: "", nome: "Cliente" }
+      try {
+        if (typeof localStorage !== "undefined") {
+            const sessionStr = localStorage.getItem("granja_session")
+            if (sessionStr) {
+                const session = JSON.parse(sessionStr)
+                if (session.user) {
+                    user = {
+                        email: session.user.email,
+                        id: session.user.id,
+                        nome: session.user.user_metadata?.nome || "Cliente"
+                    }
+                }
+            }
+        }
+      } catch (e) {
+          console.warn("Erro ao ler sessão local:", e)
+      }
+
+      if (!user.email || !user.id) {
+          throw new Error("Usuário não identificado. Faça login novamente.")
+      }
 
       const response = await fetch("/api/mercadopago/preference", {
         method: "POST",
@@ -538,9 +584,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           ],
           payer: {
             email: user.email,
-            name: user.nome || "Cliente",
+            name: user.nome,
           },
-          external_reference: user.id || user.email,
+          external_reference: user.id,
           planId: plan.id,
         }),
       })
