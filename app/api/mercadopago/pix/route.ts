@@ -28,6 +28,19 @@ export async function POST(req: Request) {
 
     const payment = new Payment(mercadopago)
 
+    // URL base da aplicação
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    
+    // Verifica se é localhost para tratar notification_url
+    // O Mercado Pago NÃO aceita localhost no notification_url
+    const isLocalhost = baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1")
+    
+    // Se for localhost, NÃO envia notification_url para evitar erro 400
+    // Em produção, deve-se usar uma URL válida (ex: https://meusite.com/api/...)
+    const notificationUrl = isLocalhost 
+        ? undefined 
+        : `${baseUrl}/api/mercadopago/webhook`
+
     const paymentData = {
       body: {
         transaction_amount: Number(amount),
@@ -40,7 +53,7 @@ export async function POST(req: Request) {
           plan_id: planId
         },
         external_reference: userId,
-        notification_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/mercadopago/webhook`,
+        notification_url: notificationUrl,
       },
     }
 

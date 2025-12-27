@@ -22,6 +22,17 @@ export async function POST(req: Request) {
 
     const preference = new Preference(mercadopago)
 
+    // URL base da aplicação
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"
+    
+    // Verifica se é localhost para tratar notification_url e back_urls
+    // Mercado Pago exige URLs válidas
+    const isLocalhost = baseUrl.includes("localhost") || baseUrl.includes("127.0.0.1")
+    
+    const notificationUrl = isLocalhost 
+        ? undefined 
+        : `${baseUrl}/api/mercadopago/webhook`
+
     const result = await preference.create({
       body: {
         items: items, 
@@ -34,12 +45,12 @@ export async function POST(req: Request) {
         },
         external_reference: external_reference,
         back_urls: {
-          success: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard?status=success`,
-          failure: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard?status=failure`,
-          pending: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/dashboard?status=pending`,
+          success: `${baseUrl}/dashboard?status=success`,
+          failure: `${baseUrl}/dashboard?status=failure`,
+          pending: `${baseUrl}/dashboard?status=pending`,
         },
         auto_return: "approved",
-        notification_url: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/mercadopago/webhook`,
+        notification_url: notificationUrl,
       },
     })
 
