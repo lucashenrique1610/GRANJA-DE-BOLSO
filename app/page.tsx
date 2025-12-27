@@ -84,7 +84,12 @@ export default function LoginPage() {
           duration: 7000,
         })
       } else {
-        toast({ title: t.loginErrorTitle, description: t.loginErrorDesc, variant: "destructive", duration: 6000 })
+        toast({ 
+            title: t.loginErrorTitle, 
+            description: res.errorMessage || t.loginErrorDesc, 
+            variant: "destructive", 
+            duration: 6000 
+        })
       }
     }
   }

@@ -111,6 +111,7 @@ describe('Integração Mercado Pago', () => {
       },
     };
 
+    // @ts-expect-error – test data omits required id field
     await preference.create(preferenceData);
 
     expect(mockPreferenceCreate).toHaveBeenCalledWith(expect.objectContaining({

@@ -86,7 +86,7 @@ export function useAuth() {
     init()
   }, [])
 
-  const login = async (email: string, password: string): Promise<{ ok: boolean; unconfirmed?: boolean }> => {
+  const login = async (email: string, password: string): Promise<{ ok: boolean; unconfirmed?: boolean; errorMessage?: string }> => {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -99,7 +99,7 @@ export function useAuth() {
       if (!res.ok) {
         const msg = String(data.error || "")
         const unconfirmed = /confirm|verify|verificar|confirmar/i.test(msg)
-        return { ok: false, unconfirmed }
+        return { ok: false, unconfirmed, errorMessage: msg }
       }
 
       if (data.session) {
@@ -115,9 +115,9 @@ export function useAuth() {
         setUser(cur)
         return { ok: true }
       }
-      return { ok: false }
-    } catch {
-      return { ok: false }
+      return { ok: false, errorMessage: "Sessão não criada" }
+    } catch (e: any) {
+      return { ok: false, errorMessage: e.message || "Erro de conexão" }
     }
   }
 
