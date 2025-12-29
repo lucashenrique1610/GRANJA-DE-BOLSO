@@ -591,15 +591,24 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         }),
       })
 
-      if (!response.ok) throw new Error("Falha ao criar preferência")
+      if (!response.ok) {
+        let errorMsg = "Falha ao criar preferência";
+        try {
+           const errData = await response.json();
+           errorMsg = errData.details || errorMsg;
+        } catch(e) {
+           // ignore json parse error
+        }
+        throw new Error(errorMsg)
+      }
 
       const data = await response.json()
       return data.init_point // URL para redirecionamento
-    } catch (error) {
+    } catch (error: any) {
       console.error("Erro na preferência:", error)
       toast({
         title: "Erro no pagamento",
-        description: "Não foi possível iniciar o pagamento.",
+        description: error.message || "Não foi possível iniciar o pagamento.",
         variant: "destructive",
       })
       return null

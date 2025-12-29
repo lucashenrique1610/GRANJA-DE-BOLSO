@@ -74,6 +74,14 @@ export async function POST(req: Request) {
     if (error.cause) {
         console.error(`[MP-PIX-${requestId}] Causa Detalhada:`, JSON.stringify(error.cause, null, 2))
     }
-    return new NextResponse("Erro ao criar pagamento PIX", { status: 500 })
+    
+    // Tentar extrair mensagem amigável do erro do Mercado Pago
+    const errorMessage = error.message || "Erro desconhecido no processamento";
+    const errorDetail = error.cause?.description || error.cause?.message || "";
+    
+    return NextResponse.json(
+      { error: "Erro ao criar pagamento PIX", details: errorMessage, more_info: errorDetail },
+      { status: 500 }
+    )
   }
 }

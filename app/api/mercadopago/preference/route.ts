@@ -66,6 +66,12 @@ export async function POST(req: Request) {
     if (error.cause) {
         console.error(`[MP-PREF-${requestId}] Detalhes:`, JSON.stringify(error.cause, null, 2))
     }
-    return new NextResponse("Erro ao criar preferência", { status: 500 })
+    
+    const errorMessage = error.message || "Erro desconhecido na preferência";
+    
+    return NextResponse.json(
+      { error: "Erro ao criar preferência", details: errorMessage },
+      { status: 500 }
+    )
   }
 }
