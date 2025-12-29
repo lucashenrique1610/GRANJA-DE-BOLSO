@@ -33,53 +33,69 @@ export default function AdminAssinaturasPage() {
   const [referenceInput, setReferenceInput] = useState("")
   const [isLoading, setIsLoading] = useState(true)
 
-  // Verificar autenticação (em um sistema real, verificaria se o usuário é admin)
+  // Verificar autenticação e carregar dados reais
   useEffect(() => {
     requireAuth()
 
-    // Simular carregamento de assinaturas pendentes
-    setTimeout(() => {
-      // Dados fictícios para demonstração
-      const mockPendingSubscriptions: PendingSubscription[] = [
-        {
-          id: "sub_123456",
-          userId: "user_1",
-          userName: "João Silva",
-          userEmail: "joao@example.com",
-          planId: "mensal",
-          planName: "Mensal",
-          amount: 20,
-          reference: "GRANJA16789012345",
-          date: "10/04/2025",
-          status: "pending",
-        },
-        {
-          id: "sub_123457",
-          userId: "user_2",
-          userName: "Maria Souza",
-          userEmail: "maria@example.com",
-          planId: "trimestral",
-          planName: "Trimestral",
-          amount: 54,
-          reference: "GRANJA16789054321",
-          date: "09/04/2025",
-          status: "pending",
-        },
-      ]
+    const fetchSubscriptions = async () => {
+        try {
+            // Buscar sessão para token
+            const sessionStr = localStorage.getItem("granja_session")
+            if (!sessionStr) return
+            const { access_token } = JSON.parse(sessionStr)
 
-      setPendingSubscriptions(mockPendingSubscriptions)
-      setIsLoading(false)
-    }, 1000)
-  }, [requireAuth])
+            // Buscar assinaturas do banco via API (vamos criar essa rota ou usar supabase client direto)
+            // Aqui vamos usar uma rota API para garantir segurança e acesso admin
+            const res = await fetch("/api/admin/subscriptions", {
+                headers: {
+                    Authorization: `Bearer ${access_token}`
+                }
+            })
+            
+            if (res.ok) {
+                const data = await res.json()
+                setPendingSubscriptions(data)
+            }
+        } catch (error) {
+            console.error("Erro ao carregar assinaturas:", error)
+            toast({
+                title: "Erro",
+                description: "Não foi possível carregar as assinaturas.",
+                variant: "destructive"
+            })
+        } finally {
+            setIsLoading(false)
+        }
+    }
 
-  const handleConfirmSubscription = (id: string) => {
-    // Em um sistema real, isso enviaria uma requisição para o backend
-    setPendingSubscriptions((prev) => prev.map((sub) => (sub.id === id ? { ...sub, status: "confirmed" } : sub)))
+    fetchSubscriptions()
+  }, [requireAuth, toast])
 
-    toast({
-      title: "Assinatura confirmada",
-      description: "O usuário agora tem acesso ao sistema.",
-    })
+  const handleConfirmSubscription = async (id: string) => {
+    try {
+        const sessionStr = localStorage.getItem("granja_session")
+        if (!sessionStr) return
+        const { access_token } = JSON.parse(sessionStr)
+
+        const res = await fetch(`/api/admin/subscriptions/${id}/confirm`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${access_token}` }
+        })
+
+        if (!res.ok) throw new Error("Falha ao confirmar")
+
+        setPendingSubscriptions((prev) => prev.map((sub) => (sub.id === id ? { ...sub, status: "confirmed" } : sub)))
+        toast({
+            title: "Assinatura confirmada",
+            description: "O usuário agora tem acesso ao sistema.",
+        })
+    } catch (e) {
+        toast({
+            title: "Erro",
+            description: "Não foi possível confirmar a assinatura.",
+            variant: "destructive"
+        })
+    }
   }
 
   const handleRejectSubscription = (id: string) => {
