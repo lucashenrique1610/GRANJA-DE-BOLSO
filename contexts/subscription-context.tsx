@@ -147,70 +147,56 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       await syncSubscriptionWithBackend()
     } catch (error) {
       console.error("Erro ao carregar dados de assinatura:", error)
-      // Se falhar o backend e não tiver local, inicializar trial
-      if (!localStorage.getItem("subscription")) {
-          initializeTrial()
-      }
     } finally {
       setIsLoading(false)
     }
   }
 
-  const initializeTrial = () => {
-      const trialDays = 7
-      const trialEnd = new Date()
-      trialEnd.setDate(trialEnd.getDate() + trialDays)
-
-      const newStatus: SubscriptionStatus = {
-          ...defaultStatus,
-          trialEndsAt: trialEnd.toISOString(),
-      }
-
-      setSubscriptionStatus(newStatus)
-      localStorage.setItem("subscription", JSON.stringify(newStatus))
-  }
-
   const syncSubscriptionWithBackend = async () => {
+    try {
+      const sessionStr = typeof localStorage !== "undefined" ? localStorage.getItem("granja_session") : null
+      if (!sessionStr) return
+
+      let userId = ""
       try {
-          const userDataStr = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("currentUser") : null
-          if (!userDataStr) return
-
-          const user = JSON.parse(userDataStr)
-          const userId = user.id || user.email
-
-          const res = await fetch(`/api/subscription/status?userId=${encodeURIComponent(userId)}`)
-          if (res.ok) {
-              const data = await res.json()
-              if (data.active && data.subscription) {
-                  // Atualizar status local com dados do servidor
-                  const sub = data.subscription
-                  const plan = plans.find(p => p.price === sub.price_id) || plans.find(p => p.id === "mensal") // Fallback
-                  
-                  // Mapear status do Stripe/Supabase para nosso status
-                  const statusMap: Record<string, any> = {
-                      'active': 'paid',
-                      'trialing': 'paid', // Consideramos trial do Stripe como pago/ativo
-                  }
-
-                  const newStatus: SubscriptionStatus = {
-                      active: true,
-                      currentPlan: plan || null,
-                      startDate: sub.current_period_start,
-                      endDate: sub.current_period_end,
-                      paymentStatus: statusMap[sub.status] || 'pending',
-                      lastPaymentDate: sub.created,
-                      trialEndsAt: sub.trial_end,
-                      paymentReference: sub.id
-                  }
-                  
-                  // Só atualiza se for diferente (para evitar re-renders desnecessários ou loops se eu chamasse em useEffect sem cuidado)
-                  // Mas aqui estamos chamando apenas no load.
-                  saveSubscriptionData(newStatus)
-              }
-          }
-      } catch (e) {
-          console.error("Sync error", e)
+        const session = JSON.parse(sessionStr)
+        if (session && session.user && session.user.id) {
+          userId = session.user.id
+        }
+      } catch {
+        return
       }
+
+      if (!userId) return
+
+      const res = await fetch(`/api/subscription/status?userId=${encodeURIComponent(userId)}`)
+      if (res.ok) {
+        const data = await res.json()
+        if (data.active && data.subscription) {
+          const sub = data.subscription
+          const plan = plans.find((p) => p.price === sub.price_id) || plans.find((p) => p.id === "mensal")
+          const statusMap: Record<string, any> = {
+            active: "paid",
+            trialing: "paid",
+          }
+
+          const newStatus: SubscriptionStatus = {
+            active: true,
+            currentPlan: plan || null,
+            startDate: sub.current_period_start,
+            endDate: sub.current_period_end,
+            paymentStatus: statusMap[sub.status] || "pending",
+            lastPaymentDate: sub.created,
+            trialEndsAt: sub.trial_end,
+            paymentReference: sub.id,
+          }
+
+          saveSubscriptionData(newStatus)
+        }
+      }
+    } catch (e) {
+      console.error("Sync error", e)
+    }
   }
 
   const saveSubscriptionData = (data: SubscriptionStatus) => {

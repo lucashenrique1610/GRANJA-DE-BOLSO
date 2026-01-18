@@ -56,8 +56,13 @@ export default function DashboardPage() {
 
   const checkAlerts = useCallback(() => {
     const alerts: string[] = []
-    if (isInTrial() && daysLeftInTrial() <= 3) {
-      alerts.push(`Seu período de teste termina em ${daysLeftInTrial()} dias! Assine para continuar usando o sistema.`)
+    if (isInTrial()) {
+      const trialDays = daysLeftInTrial()
+      if (trialDays === 1) {
+        alerts.push("Seu período de teste termina em 24 horas! Assine para continuar usando o sistema.")
+      } else if (trialDays > 1 && trialDays <= 3) {
+        alerts.push(`Seu período de teste termina em ${trialDays} dias! Assine para continuar usando o sistema.`)
+      }
     }
     if (subscriptionStatus.active && subscriptionStatus.endDate) {
       const endDate = new Date(subscriptionStatus.endDate)

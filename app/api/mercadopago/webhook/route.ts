@@ -47,13 +47,16 @@ export async function POST(req: Request) {
             }
 
             await supabaseAdmin.from("subscriptions").upsert({
+                id: `mp_${payment.id}`,
                 user_id: userId,
                 status: "active",
-                plan_id: planId,
                 current_period_start: startDate.toISOString(),
                 current_period_end: endDate.toISOString(),
-                updated_at: new Date().toISOString(),
-                stripe_subscription_id: `mp_${payment.id}` // Identificador único
+                metadata: {
+                  method: "pix",
+                  plan_id: planId,
+                  payment_id: payment.id
+                }
             })
             
             console.log(`Assinatura ativada para usuário ${userId} via Webhook MP`)
