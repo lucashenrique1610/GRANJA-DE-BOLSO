@@ -277,7 +277,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true)
 
-      // Verificar se a referência corresponde
       if (subscriptionStatus.paymentReference !== reference) {
         toast({
           title: "Referência inválida",
@@ -287,7 +286,28 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         return false
       }
 
-      // Atualizar status para pago
+      const res = await fetch("/api/mercadopago/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paymentId: reference })
+      })
+      if (!res.ok) {
+        toast({
+          title: "Erro na confirmação",
+          description: "Falha ao confirmar o pagamento.",
+          variant: "destructive",
+        })
+        return false
+      }
+      const data = await res.json()
+      if (!data.confirmed) {
+        toast({
+          title: "Pagamento não aprovado",
+          description: "Aguardando confirmação do Mercado Pago.",
+          variant: "default",
+        })
+        return false
+      }
       const newStatus: SubscriptionStatus = {
         ...subscriptionStatus,
         active: true,

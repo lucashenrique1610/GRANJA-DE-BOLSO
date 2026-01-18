@@ -21,6 +21,12 @@ export default function PagamentoPage() {
   const [countdown, setCountdown] = useState(900) // 15 minutos em segundos
   const [isConfirming, setIsConfirming] = useState(false)
   const [pixData, setPixData] = useState<any>(null)
+  const [pollingStatus, setPollingStatus] = useState<string>("")
+
+  const displayBase64 = pixData?.qr_code_base64 || ""
+  const displayCopyPaste = pixData?.qr_code || ""
+  const displayValue = pixData?.transaction_amount || subscriptionStatus.currentPlan?.totalPrice || 0
+  const displayId = pixData?.id || subscriptionStatus.paymentReference || ""
 
   // Verificar autenticação
   requireAuth()
@@ -30,13 +36,42 @@ export default function PagamentoPage() {
     if (saved) {
       setPixData(JSON.parse(saved))
     } else if (!isLoading && subscriptionStatus.paymentStatus !== "pending") {
-       // Se não tiver dados do PIX e não estiver pendente, redirecionar
-       // Mas se estiver pendente (carregado do banco), talvez não tenhamos o QR Code salvo.
-       // Nesse caso, o ideal seria mostrar apenas que está pendente ou tentar recuperar (não implementado).
-       // Por enquanto, mantemos comportamento de redirecionar se não tiver pendência.
        router.push("/assinatura")
     }
   }, [isLoading, subscriptionStatus, router])
+
+  // Polling de status do pagamento
+  useEffect(() => {
+    if (!displayId || isConfirming) return
+
+    const pollInterval = setInterval(async () => {
+      try {
+        // Verificar status silenciosamente
+        const res = await fetch("/api/mercadopago/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentId: displayId }),
+        })
+        
+        if (res.ok) {
+          const data = await res.json()
+          if (data.confirmed) {
+            clearInterval(pollInterval)
+            toast({ title: "Pagamento confirmado!", description: "Sua assinatura foi ativada com sucesso." })
+            // Atualizar estado global
+            await confirmPayment(displayId.toString())
+            router.push("/dashboard")
+          } else {
+             setPollingStatus(data.status)
+          }
+        }
+      } catch (e) {
+        console.error("Erro no polling de pagamento", e)
+      }
+    }, 5000) // Verificar a cada 5 segundos
+
+    return () => clearInterval(pollInterval)
+  }, [displayId, isConfirming, router, confirmPayment, toast])
 
   useEffect(() => {
     // Iniciar contagem regressiva
@@ -79,11 +114,6 @@ export default function PagamentoPage() {
     }
   }
 
-  const displayBase64 = pixData?.qr_code_base64 || ""
-  const displayCopyPaste = pixData?.qr_code || ""
-  const displayValue = pixData?.transaction_amount || subscriptionStatus.currentPlan?.totalPrice || 0
-  const displayId = pixData?.id || subscriptionStatus.paymentReference || ""
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -107,9 +137,17 @@ export default function PagamentoPage() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Detalhes do Pagamento</CardTitle>
-              <div className="flex items-center gap-1 text-amber-600">
-                <Clock className="h-4 w-4" />
-                <span className="text-sm font-medium">{formatTime(countdown)}</span>
+              <div className="flex flex-col items-end">
+                <div className="flex items-center gap-1 text-amber-600">
+                  <Clock className="h-4 w-4" />
+                  <span className="text-sm font-medium">{formatTime(countdown)}</span>
+                </div>
+                {pollingStatus === "pending" && (
+                   <span className="text-xs font-medium text-blue-600 animate-pulse mt-1">Aguardando confirmação...</span>
+                )}
+                {pollingStatus && pollingStatus !== "pending" && (
+                   <span className="text-xs font-medium text-muted-foreground capitalize mt-1">Status: {pollingStatus}</span>
+                )}
               </div>
             </div>
             <CardDescription>

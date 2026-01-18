@@ -155,20 +155,49 @@ function getSessionToken(): string | null {
   return null
 }
 
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelay = 300): Promise<T> {
+  let lastError: any
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn()
+    } catch (e) {
+      lastError = e
+      if (i < attempts - 1) {
+        await delay(baseDelay * Math.pow(2, i))
+      }
+    }
+  }
+  throw lastError
+}
+
 async function upsertClienteSupabase(cliente: Cliente): Promise<boolean> {
   const token = getSessionToken()
   if (!token) return false
   
   try {
-      const res = await fetch("/api/clientes", {
-          method: "POST",
-          headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${token}`
-          },
-          body: JSON.stringify(cliente)
+      const ok = await withRetry(async () => {
+        const res = await fetch("/api/clientes", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              nome: cliente.nome,
+              endereco: cliente.endereco,
+              telefone: cliente.telefone,
+              cpf_cnpj: cliente.cpfCnpj,
+              tipo: cliente.tipo
+            })
+        })
+        if (!res.ok) throw new Error("failed")
+        return true
       })
-      return res.ok
+      return ok
   } catch {
       return false
   }
@@ -179,11 +208,24 @@ async function fetchClientesSupabase(): Promise<Cliente[]> {
   if (!token) return []
   
   try {
-      const res = await fetch("/api/clientes", {
-          headers: { "Authorization": `Bearer ${token}` }
+      const arr = await withRetry(async () => {
+        const res = await fetch("/api/clientes", {
+            headers: { "Authorization": `Bearer ${token}` }
+        })
+        if (!res.ok) throw new Error("failed")
+        return await res.json()
       })
-      if (!res.ok) return []
-      return await res.json()
+      
+      if (Array.isArray(arr)) {
+        return arr.map((c: any) => ({
+          nome: c.nome,
+          endereco: c.endereco,
+          telefone: c.telefone,
+          cpfCnpj: c.cpf_cnpj || c.cpfCnpj, // Fallback just in case
+          tipo: c.tipo
+        }))
+      }
+      return []
   } catch {
       return []
   }
@@ -308,6 +350,13 @@ export const DataService = {
     return fornecedor
   },
 
+  // Backup Stub (Compatibility)
+  createBackup: async (): Promise<boolean> => {
+    console.warn("DataService.createBackup is deprecated. Use BackupService instead.")
+    return false
+  },
+
+  
   loadClientesFromSupabase: async (): Promise<Cliente[]> => {
     const arr = await fetchClientesSupabase()
     if (arr.length) {
