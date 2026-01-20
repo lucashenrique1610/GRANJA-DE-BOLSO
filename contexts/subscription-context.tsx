@@ -48,6 +48,7 @@ interface SubscriptionContextType {
   generatePaymentReference: () => string
   subscribeMercadoPagoPix: (planId: string) => Promise<PixPaymentResponse | null>
   subscribeMercadoPagoPreference: (planId: string) => Promise<string | null>
+  checkPaymentStatus: () => Promise<void>
 }
 
 // Definição dos planos

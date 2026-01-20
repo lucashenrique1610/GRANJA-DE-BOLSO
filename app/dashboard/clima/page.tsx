@@ -185,6 +185,115 @@ export default function ClimaPage() {
     } catch {}
   }
 
+  const fetchOpenMeteo = async (lat: number, lon: number) => {
+    try {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,rain,weather_code,cloud_cover,pressure_msl,surface_pressure,wind_speed_10m&hourly=temperature_2m,weather_code,visibility&daily=sunrise,sunset&timezone=auto`
+      const r = await fetch(url)
+      if (!r.ok) throw new Error("Falha na API Open-Meteo")
+      const data = await r.json()
+      
+      const current = data.current
+      const hourly = data.hourly
+      const daily = data.daily
+
+      // Mapeamento de códigos WMO para formato similar ao OpenWeather
+      const wmoToOW: Record<number, { main: string; description: string; icon: string }> = {
+        0: { main: "Clear", description: "Céu limpo", icon: "01" },
+        1: { main: "Clouds", description: "Predominantemente limpo", icon: "02" },
+        2: { main: "Clouds", description: "Parcialmente nublado", icon: "03" },
+        3: { main: "Clouds", description: "Encoberto", icon: "04" },
+        45: { main: "Mist", description: "Nevoeiro", icon: "50" },
+        48: { main: "Mist", description: "Nevoeiro com geada", icon: "50" },
+        51: { main: "Drizzle", description: "Garoa leve", icon: "09" },
+        53: { main: "Drizzle", description: "Garoa moderada", icon: "09" },
+        55: { main: "Drizzle", description: "Garoa densa", icon: "09" },
+        61: { main: "Rain", description: "Chuva fraca", icon: "10" },
+        63: { main: "Rain", description: "Chuva moderada", icon: "10" },
+        65: { main: "Rain", description: "Chuva forte", icon: "10" },
+        71: { main: "Snow", description: "Neve fraca", icon: "13" },
+        73: { main: "Snow", description: "Neve moderada", icon: "13" },
+        75: { main: "Snow", description: "Neve forte", icon: "13" },
+        95: { main: "Thunderstorm", description: "Tempestade", icon: "11" },
+        96: { main: "Thunderstorm", description: "Tempestade com granizo leve", icon: "11" },
+        99: { main: "Thunderstorm", description: "Tempestade com granizo forte", icon: "11" },
+      }
+
+      const wmo = wmoToOW[current.weather_code] || { main: "Clear", description: "Céu limpo", icon: "01" }
+      const isDay = current.is_day === 1
+      const iconSuffix = isDay ? "d" : "n"
+
+      setTemp(current.temperature_2m)
+      setDescription(wmo.description)
+      setHumidity(current.relative_humidity_2m)
+      setFeelsLike(current.apparent_temperature)
+      setWindKmh(current.wind_speed_10m)
+      setPressure(current.pressure_msl || current.surface_pressure)
+      
+      // Open-Meteo não dá visibilidade atual direta na versão free as vezes, mas tem hourly
+      // Pegar visibilidade da hora atual
+      const currentHourIndex = new Date().getHours()
+      const vis = hourly.visibility ? hourly.visibility[currentHourIndex] : 10000
+      setVisibilityKm((vis / 1000).toFixed(1) + " km")
+
+      // Nascer e Pôr do sol (daily)
+      if (daily && daily.sunrise && daily.sunrise[0] && daily.sunset && daily.sunset[0]) {
+        const sunrise = new Date(daily.sunrise[0]).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+        const sunset = new Date(daily.sunset[0]).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
+        setSunText(`${sunrise} / ${sunset}`)
+      }
+
+      setIcon(wmo.icon + iconSuffix)
+      setBackground(wmo.main, isDay)
+
+      // Hourly forecast (next 6 hours)
+      const nextHours = []
+      for (let i = currentHourIndex + 1; i < currentHourIndex + 7; i++) {
+        if (hourly.time[i]) {
+            const hWmo = wmoToOW[hourly.weather_code[i]] || wmoToOW[0]
+            // Determinar se é dia/noite para o ícone horário (aproximado)
+            const hTime = new Date(hourly.time[i])
+            const hHour = hTime.getHours()
+            const hIsDay = hHour >= 6 && hHour < 18 
+            
+            nextHours.push({
+                time: hTime.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+                icon: hWmo.icon + (hIsDay ? "d" : "n"),
+                temp: Math.round(hourly.temperature_2m[i])
+            })
+        }
+      }
+      setHourly(nextHours)
+      
+      // Min/Max do dia
+      if (daily && daily.temperature_2m_max && daily.temperature_2m_min) {
+        setTempMax(daily.temperature_2m_max[0])
+        setTempMin(daily.temperature_2m_min[0])
+      }
+
+      // Verificar alertas
+      checkAndNotify(current.temperature_2m, current.wind_speed_10m)
+
+      // Resolver nome da cidade
+      try {
+        const resolved = await GeoService.resolveCityName(String(lat), String(lon), config)
+        if (resolved) {
+          const parts = resolved.split(",").map((p) => p.trim()).filter(Boolean)
+          setCityName(parts[0] || "Localização Atual")
+          setCountry(parts.length > 1 ? parts[parts.length - 1] : "")
+        } else {
+            setCityName("Localização Detectada")
+            setCountry("")
+        }
+      } catch {
+          setCityName("Localização Detectada")
+      }
+
+    } catch (e) {
+      console.error(e)
+      throw new Error("Erro ao obter dados do Open-Meteo")
+    }
+  }
+
   const getWeatherByCoords = async (lat: number, lon: number) => {
     setLoading(true)
     setError("")
@@ -195,54 +304,15 @@ export default function ClimaPage() {
         const fc = await fetchOW(`${forecastUrl}&lat=${lat}&lon=${lon}&appid=${config.clima.apiKey}`)
         updateHourlyFromOW(fc)
       } else {
-        const curR = await fetch(`/api/weather?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}&units=metric&kind=current`)
-        const curB = await curR.json()
-        if (curR.ok) {
-          const c = curB?.data?.current || {}
-          setCityName("")
-          setCountry("")
-          setTemp(Number(c?.temp ?? 0))
-          setDescription(String(c?.weather || ""))
-          setTempMax(null)
-          setTempMin(null)
-          setHumidity(Number(c?.humidity ?? 0))
-          setFeelsLike(Number(c?.feels_like ?? 0))
-          setWindKmh(Math.round(Number(c?.wind_speed ?? 0) * 3.6))
-          setPressure(null)
-          setVisibilityKm("")
-          setSunText("")
-          setIcon(undefined)
-          setBackground(String(c?.weather || ""), true)
-          
-          // Verificar alertas
-          checkAndNotify(Number(c?.temp ?? 0), Math.round(Number(c?.wind_speed ?? 0) * 3.6))
-
-          try {
-            const resolved = await GeoService.resolveCityName(String(lat), String(lon), config)
-            if (resolved) {
-              const parts = resolved.split(",").map((p) => p.trim()).filter(Boolean)
-              setCityName(parts[0] || "")
-              setCountry(parts[parts.length - 1] || "")
-            }
-          } catch {}
-        }
-        const fcR = await fetch(`/api/weather?lat=${encodeURIComponent(String(lat))}&lon=${encodeURIComponent(String(lon))}&units=metric`)
-        const fcB = await fcR.json()
-        const hourlyArr = Array.isArray(fcB?.data?.hourly) ? fcB.data.hourly.slice(0, 6) : []
-        const items: HourItem[] = hourlyArr.map((e: { dt?: number; temp?: number }) => ({ time: new Date(Number(e?.dt || 0) * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }), temp: Math.round(Number(e?.temp ?? 0)) }))
-        setHourly(items)
+        // Fallback direto para Open-Meteo no cliente
+        await fetchOpenMeteo(lat, lon)
       }
-      try {
-        const resolved = await GeoService.resolveCityName(String(lat), String(lon), config)
-        if (resolved) {
-          const parts = resolved.split(",").map((p) => p.trim()).filter(Boolean)
-          setCityName(parts[0] || "")
-          setCountry(parts[parts.length - 1] || "")
-        }
-      } catch {}
+      
+      // Persistir
       persistAndBroadcast(String(lat), String(lon))
-    } catch {
-      setError("Erro ao carregar clima da sua localização")
+    } catch (err) {
+      console.error(err)
+      setError("Erro ao carregar clima. Verifique sua conexão.")
     }
     setLoading(false)
   }
@@ -269,10 +339,22 @@ export default function ClimaPage() {
           }
         } catch {}
       } else {
-        setError("Chave de API ausente. Configure OpenWeather nas Configurações.")
+        // Fallback para Open-Meteo: Busca coordenadas da cidade primeiro
+        const res = await GeoService.searchCity(city, config)
+        if (res.best) {
+            await fetchOpenMeteo(Number(res.best.lat), Number(res.best.lon))
+            // Atualiza nome com o resultado da busca
+            const display = [res.best.name, res.best.state, res.best.country].filter(Boolean).join(", ")
+            const parts = display.split(",").map((p) => p.trim()).filter(Boolean)
+            setCityName(parts[0] || city)
+            setCountry(parts.length > 1 ? parts[parts.length - 1] : "")
+            persistAndBroadcast(String(res.best.lat), String(res.best.lon))
+        } else {
+            throw new Error("Cidade não encontrada")
+        }
       }
     } catch {
-      setError("Cidade não encontrada")
+      setError("Cidade não encontrada ou erro na conexão.")
     }
     setLoading(false)
   }
@@ -284,14 +366,26 @@ export default function ClimaPage() {
       return
     }
     setLoading(true)
+    
+    const options = {
+        enableHighAccuracy: false, // Tenta ser mais rápido e menos restritivo
+        timeout: 10000,
+        maximumAge: 300000 // Aceita cache de 5 min
+    }
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         getWeatherByCoords(pos.coords.latitude, pos.coords.longitude)
       },
-      () => {
+      (err) => {
         setLoading(false)
-        setError("Permissão de localização negada. Use a busca manual.")
-      }
+        console.error("Erro de geolocalização:", err)
+        let msg = "Permissão de localização negada."
+        if (err.code === 2) msg = "Localização indisponível."
+        if (err.code === 3) msg = "Tempo esgotado ao buscar localização."
+        setError(msg + " Use a busca manual.")
+      },
+      options
     )
   }
 

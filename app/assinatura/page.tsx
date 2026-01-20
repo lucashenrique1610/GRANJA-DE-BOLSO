@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -39,6 +39,21 @@ export default function AssinaturaPage() {
   const [selectedPlan, setSelectedPlan] = useState("mensal")
   const [paymentReference, setPaymentReference] = useState("")
   const [paymentMethod, setPaymentMethod] = useState<"pix" | "card">("pix")
+
+  // Polling para verificar status do pagamento PIX
+  useEffect(() => {
+    let interval: NodeJS.Timeout
+
+    if (subscriptionStatus.paymentStatus === "pending") {
+      interval = setInterval(async () => {
+        await checkPaymentStatus()
+      }, 5000)
+    }
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [subscriptionStatus.paymentStatus, checkPaymentStatus])
 
   // Verificar autenticação
   requireAuth()
