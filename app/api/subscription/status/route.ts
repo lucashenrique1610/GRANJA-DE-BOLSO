@@ -21,16 +21,19 @@ export async function GET(req: Request) {
     const existing = !error && Array.isArray(data) && data.length > 0 ? data[0] : null
 
     if (existing) {
+      console.log(`[SUBSCRIPTION-CHECK] Found existing subscription for ${userId}: ${existing.status}`)
       return NextResponse.json({ active: true, subscription: existing })
     }
 
     const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId)
     if (userError || !userData || !userData.user) {
+      console.error(`[SUBSCRIPTION-CHECK] Error fetching user ${userId}:`, userError)
       return NextResponse.json({ active: false })
     }
 
     const createdAt = userData.user.created_at ? new Date(userData.user.created_at) : null
     if (!createdAt || Number.isNaN(createdAt.getTime())) {
+      console.error(`[SUBSCRIPTION-CHECK] Invalid created_at for user ${userId}`)
       return NextResponse.json({ active: false })
     }
 
@@ -38,7 +41,10 @@ export async function GET(req: Request) {
     const diffMs = now.getTime() - createdAt.getTime()
     const diffDays = diffMs / (1000 * 60 * 60 * 24)
 
+    console.log(`[SUBSCRIPTION-CHECK] User ${userId} created ${diffDays.toFixed(2)} days ago`)
+
     if (diffDays >= 7) {
+      console.log(`[SUBSCRIPTION-CHECK] User ${userId} ineligible for trial`)
       return NextResponse.json({ active: false })
     }
 
@@ -46,6 +52,8 @@ export async function GET(req: Request) {
     const trialEndDate = new Date(createdAt)
     trialEndDate.setDate(trialEndDate.getDate() + 7)
     const trialEnd = trialEndDate.toISOString()
+
+    console.log(`[SUBSCRIPTION-CHECK] Creating trial for ${userId} until ${trialEnd}`)
 
     const { data: trialData, error: trialError } = await supabaseAdmin
       .from("subscriptions")
@@ -65,11 +73,14 @@ export async function GET(req: Request) {
       .single()
 
     if (trialError || !trialData) {
+      console.error(`[SUBSCRIPTION-CHECK] Failed to create trial for ${userId}:`, trialError)
       return NextResponse.json({ active: false })
     }
 
+    console.log(`[SUBSCRIPTION-CHECK] Trial created successfully for ${userId}`)
     return NextResponse.json({ active: true, subscription: trialData })
-  } catch {
+  } catch (error) {
+    console.error(`[SUBSCRIPTION-CHECK] Internal error for ${userId}:`, error)
     return NextResponse.json({ active: false })
   }
 }
