@@ -26,6 +26,7 @@ export default function AssinaturaPage() {
     isLoading,
     cancelSubscription,
     // renewSubscription,
+    confirmPayment,
     isInTrial,
     daysLeftInTrial,
     daysLeftInSubscription,

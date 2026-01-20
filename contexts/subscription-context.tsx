@@ -345,41 +345,36 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }
 
   const cancelSubscription = async (): Promise<boolean> => {
-    // Redirecionar para o Portal do Cliente Stripe
-    try {
-      const userDataStr = typeof sessionStorage !== "undefined" ? sessionStorage.getItem("currentUser") : null
-      if (!userDataStr) throw new Error("Usuário não logado")
-      
-      const user = JSON.parse(userDataStr)
-      const res = await fetch("/api/stripe/portal", {
-        method: "POST",
-        body: JSON.stringify({ userId: user.id || user.email }),
-      })
-      
-      if (res.ok) {
-        const { url } = await res.json()
-        window.location.href = url
-        return true
-      }
-    } catch (e) {
-      console.error("Erro ao abrir portal:", e)
+    // Apenas atualiza o status local para cancelado por enquanto, já que o portal Stripe foi removido.
+    // Futuramente, integrar com endpoint de cancelamento do Mercado Pago se necessário.
+    
+    if (confirm("Tem certeza que deseja cancelar sua assinatura?")) {
+        try {
+          const newStatus: SubscriptionStatus = {
+            ...subscriptionStatus,
+            active: false,
+            paymentStatus: "canceled",
+            endDate: new Date().toISOString(),
+          }
+          setSubscriptionStatus(newStatus)
+          localStorage.setItem("subscription", JSON.stringify(newStatus))
+          
+          toast({
+              title: "Assinatura cancelada",
+              description: "Sua assinatura foi cancelada com sucesso.",
+          })
+          return true
+        } catch (error) {
+          console.error("Erro ao cancelar assinatura:", error)
+          toast({
+              title: "Erro ao cancelar",
+              description: "Não foi possível cancelar a assinatura.",
+              variant: "destructive",
+          })
+          return false
+        }
     }
-
-    // Fallback local (comportamento antigo)
-    try {
-      const newStatus: SubscriptionStatus = {
-        ...subscriptionStatus,
-        active: false,
-        paymentStatus: "canceled",
-        endDate: new Date().toISOString(),
-      }
-      setSubscriptionStatus(newStatus)
-      localStorage.setItem("subscription", JSON.stringify(newStatus))
-      return true
-    } catch (error) {
-      console.error("Erro ao cancelar assinatura:", error)
-      return false
-    }
+    return false
   }
 
   const renewSubscription = async (planId: string): Promise<boolean> => {

@@ -7,12 +7,22 @@ function loadEnv() {
     const envPath = path.join(process.cwd(), ".env.local")
     if (fs.existsSync(envPath)) {
       const content = fs.readFileSync(envPath, "utf8")
-      const lines = content.split("\n")
+      // Split lines handling both LF and CRLF
+      const lines = content.split(/\r?\n/)
       lines.forEach((line) => {
+        // Skip comments
+        if (line.trim().startsWith("#")) return
+        
         const match = line.match(/^([^=]+)=(.*)$/)
         if (match) {
           const key = match[1].trim()
-          const value = match[2].trim().replace(/^["']|["']$/g, "")
+          let value = match[2].trim()
+          // Remove surrounding quotes if present
+          if ((value.startsWith('"') && value.endsWith('"')) || 
+              (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.substring(1, value.length - 1)
+          }
+          
           if (!process.env[key]) {
             process.env[key] = value
           }

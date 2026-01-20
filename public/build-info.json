@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
-  "commitHash": "67c8f8bc2b107fb32025a3212b3ca1042b7b8999",
-  "commitMessage": "fix: Resolve build errors and force webpack for PWA compatibility\n\n- Fixed missing Lucide icon imports in configuracoes/page.tsx\n- Updated package.json to use 'next build --webpack' to support next-pwa\n- Verified local build passes successfully",
-  "timestamp": "2026-01-20T02:51:22.415Z",
+  "commitHash": "73ed4b47d845c6e947df4553c9ea83cf8d0f2994",
+  "commitMessage": "fix: PWA installation prompt not appearing\n\n- Added PwaProvider context to handle 'beforeinstallprompt' event globally\n- Refactored PwaInstallButton and PwaInstallPrompt to use global context\n- Fixed race condition where prompt event was lost before components mounted\n- Ensured manifest is correctly linked in RootLayout",
+  "timestamp": "2026-01-20T11:25:39.422Z",
   "environment": "development"
 }
