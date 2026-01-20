@@ -5,6 +5,8 @@ import DashboardLayout from "@/components/dashboard-layout"
 import { GeoService } from "@/services/geo-service"
 import { useConfig } from "@/contexts/config-context"
 import Image from "next/image"
+import { WeatherImpact } from "@/components/weather-impact"
+import { WeatherCharts } from "@/components/weather-charts"
 
 type HourItem = { time: string; icon?: string; temp: number }
 type OWCurrent = {
@@ -248,12 +250,12 @@ export default function ClimaPage() {
     <DashboardLayout>
       <div className="clima-pro min-h-[80vh] py-4 flex justify-center items-start">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
-        <div ref={containerRef} className="container mx-auto max-w-[500px] w-full mt-5 rounded-[28px] border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.4)] bg-white/15 backdrop-blur-lg px-7 py-7">
+        <div ref={containerRef} className="container mx-auto max-w-[800px] w-full mt-5 rounded-[28px] border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.4)] bg-white/15 backdrop-blur-lg px-7 py-7">
           <h1 className="text-center text-3xl font-bold mb-2">Clima Pro</h1>
           <p className="text-center opacity-90 text-base mb-5">Seu clima em tempo real • Localização automática</p>
 
-          <div className="flex gap-3 mb-5 flex-wrap">
-            <div className="flex flex-1 min-w-[250px] overflow-hidden rounded-full shadow-lg">
+          <div className="flex gap-3 mb-5 flex-wrap justify-center">
+            <div className="flex flex-1 min-w-[250px] max-w-[500px] overflow-hidden rounded-full shadow-lg">
               <input
                 type="text"
                 value={cityInput}
@@ -361,6 +363,19 @@ export default function ClimaPage() {
                 <div className="text-sm text-center w-full">Sem dados</div>
               )}
             </div>
+          </div>
+
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+             <div className="space-y-6">
+                {temp !== null && humidity !== null && windKmh !== null && (
+                  <WeatherImpact temp={temp} humidity={humidity} windKmh={windKmh} />
+                )}
+             </div>
+             <div className="space-y-6">
+                {hourly.length > 0 && (
+                  <WeatherCharts data={hourly} />
+                )}
+             </div>
           </div>
         </div>
         <style jsx>{`
