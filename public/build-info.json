@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
-  "commitHash": "8f30256bcbe85f4d93f23a8d6ac83f12c2234c9f",
-  "commitMessage": "fix: Add manual PWA install button in header to ensure install option is always accessible\n\n- Added PwaInstallButton component that appears when installation is available\n- Integrated install button into DashboardLayout header\n- Provides fallback for when the automatic prompt is dismissed or blocked\n- Includes specific instructions for iOS manual installation",
-  "timestamp": "2026-01-20T02:39:11.012Z",
+  "commitHash": "67c8f8bc2b107fb32025a3212b3ca1042b7b8999",
+  "commitMessage": "fix: Resolve build errors and force webpack for PWA compatibility\n\n- Fixed missing Lucide icon imports in configuracoes/page.tsx\n- Updated package.json to use 'next build --webpack' to support next-pwa\n- Verified local build passes successfully",
+  "timestamp": "2026-01-20T02:51:22.415Z",
   "environment": "development"
 }

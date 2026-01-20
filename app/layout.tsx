@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { ConfigProvider } from "@/contexts/config-context"
 import { SubscriptionProvider } from "@/contexts/subscription-context"
 import { TipsProvider } from "@/contexts/tips-context"
+import { PwaProvider } from "@/contexts/pwa-context"
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -39,15 +40,17 @@ export default function RootLayout({
     <html lang="pt-BR" className="light" style={{ colorScheme: "light" }} suppressHydrationWarning>
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
-          <ConfigProvider>
-            <SubscriptionProvider>
-              <TipsProvider>
-                {children}
-                <PwaInstallPrompt />
-                <Toaster />
-              </TipsProvider>
-            </SubscriptionProvider>
-          </ConfigProvider>
+          <PwaProvider>
+            <ConfigProvider>
+              <SubscriptionProvider>
+                <TipsProvider>
+                  {children}
+                  <PwaInstallPrompt />
+                  <Toaster />
+                </TipsProvider>
+              </SubscriptionProvider>
+            </ConfigProvider>
+          </PwaProvider>
         </ThemeProvider>
       </body>
     </html>

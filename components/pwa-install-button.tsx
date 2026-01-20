@@ -11,51 +11,36 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { usePwa } from "@/contexts/pwa-context"
 
 export function PwaInstallButton() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
-  const [isIOS, setIsIOS] = useState(false)
-  const [isStandalone, setIsStandalone] = useState(false)
+  const { deferredPrompt, isIOS, isStandalone, install } = usePwa()
   const [mounted, setMounted] = useState(false)
   const [showIOSHelp, setShowIOSHelp] = useState(false)
 
   useEffect(() => {
     setMounted(true)
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
-    setIsIOS(isIOSDevice)
-    setIsStandalone(window.matchMedia("(display-mode: standalone)").matches)
-
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault()
-      setDeferredPrompt(e)
-    }
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-    }
   }, [])
-
-  const handleInstallClick = async () => {
-    if (isIOS) {
-      setShowIOSHelp(true)
-      return
-    }
-
-    if (!deferredPrompt) return
-
-    deferredPrompt.prompt()
-    const { outcome } = await deferredPrompt.userChoice
-    if (outcome === "accepted") {
-      setDeferredPrompt(null)
-    }
-  }
 
   if (!mounted || isStandalone) return null
   
   // Show if we have a prompt (Android/Desktop) or if it's iOS
-  if (!deferredPrompt && !isIOS) return null
+  // IMPORTANT: For debugging/testing, we might want to show it even if deferredPrompt is null, 
+  // but disabled? No, user said "option doesn't appear".
+  
+  if (!deferredPrompt && !isIOS) {
+    // Optional: Log why it's hidden for debugging
+    // console.log("PWA Button hidden: No prompt and not iOS")
+    return null
+  }
+
+  const handleInstallClick = () => {
+    if (isIOS) {
+      setShowIOSHelp(true)
+    } else {
+      install()
+    }
+  }
 
   if (isIOS) {
     return (

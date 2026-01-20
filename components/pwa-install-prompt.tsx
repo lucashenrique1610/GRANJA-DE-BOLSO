@@ -11,57 +11,36 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { usePwa } from "@/contexts/pwa-context"
 
 export function PwaInstallPrompt() {
-  const [isIOS, setIsIOS] = useState(false)
-  const [isStandalone, setIsStandalone] = useState(false)
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const { deferredPrompt, isIOS, isStandalone, install } = usePwa()
   const [showPrompt, setShowPrompt] = useState(false)
 
   useEffect(() => {
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
-    setIsIOS(isIOSDevice)
-
-    setIsStandalone(window.matchMedia("(display-mode: standalone)").matches)
-
     // Check dismissal state
     const dismissed = localStorage.getItem("pwa-prompt-dismissed")
     const lastShown = localStorage.getItem("pwa-prompt-last-shown")
     const now = Date.now()
     const shouldShow = !dismissed || (lastShown && now - parseInt(lastShown) > 7 * 24 * 60 * 60 * 1000)
 
-    if (isIOSDevice && shouldShow && !window.matchMedia("(display-mode: standalone)").matches) {
-      setShowPrompt(true)
-      localStorage.setItem("pwa-prompt-last-shown", now.toString())
-    }
-
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault()
-      setDeferredPrompt(e)
-      
-      if (shouldShow) {
-        setShowPrompt(true)
-        localStorage.setItem("pwa-prompt-last-shown", now.toString())
+    // Show prompt if available or if iOS (and not standalone)
+    if (shouldShow && !isStandalone) {
+      if (deferredPrompt || isIOS) {
+         setShowPrompt(true)
+         localStorage.setItem("pwa-prompt-last-shown", now.toString())
       }
     }
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
-    }
-  }, [])
+  }, [deferredPrompt, isIOS, isStandalone])
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return
-
-    deferredPrompt.prompt()
-
-    const { outcome } = await deferredPrompt.userChoice
-    
-    if (outcome === "accepted") {
-      setDeferredPrompt(null)
-      setShowPrompt(false)
+    if (isIOS) {
+        // iOS doesn't support programmatic install, so we just keep the prompt open 
+        // which contains instructions. But here the button is "Instalar".
+        // Actually the iOS UI below shows instructions directly.
+    } else {
+        await install()
+        setShowPrompt(false)
     }
   }
 
@@ -100,22 +79,29 @@ export function PwaInstallPrompt() {
             }
           </CardDescription>
         </CardHeader>
-        
-        {isIOS ? (
-          <CardContent className="pt-2 pb-2 text-sm text-muted-foreground space-y-2">
-            <div className="flex items-center gap-2">
-              1. Toque no botão <Share className="h-4 w-4 inline" /> Compartilhar
+        <CardContent>
+          {isIOS ? (
+            <div className="space-y-3 text-sm">
+              <p className="flex items-center gap-2">
+                1. Toque no botão <Share className="h-4 w-4" />
+              </p>
+              <p className="flex items-center gap-2">
+                2. Selecione <span className="font-semibold">Adicionar à Tela de Início</span> <PlusSquare className="h-4 w-4" />
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              2. Selecione <PlusSquare className="h-4 w-4 inline" /> Adicionar à Tela de Início
-            </div>
-          </CardContent>
-        ) : (
-          <CardFooter className="pt-2">
-            <Button onClick={handleInstallClick} className="w-full">
-              Adicionar à Tela Inicial
-            </Button>
-          </CardFooter>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Tenha acesso direto da sua tela inicial, sem precisar abrir o navegador.
+            </p>
+          )}
+        </CardContent>
+        {!isIOS && (
+            <CardFooter>
+              <Button className="w-full gap-2" onClick={handleInstallClick}>
+                <Download className="h-4 w-4" />
+                Instalar Agora
+              </Button>
+            </CardFooter>
         )}
       </Card>
     </div>
