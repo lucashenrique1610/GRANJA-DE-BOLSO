@@ -32,6 +32,7 @@ export default function AssinaturaPage() {
     daysLeftInSubscription,
     subscribeMercadoPagoPix,
     subscribeMercadoPagoPreference,
+    checkPaymentStatus,
   } = useSubscription()
 
   const [isProcessing, setIsProcessing] = useState(false)
@@ -296,8 +297,15 @@ export default function AssinaturaPage() {
 
               {/* Confirmação de pagamento */}
               {subscriptionStatus.paymentStatus === "pending" && (
-                <div className="space-y-4 mt-4 p-4 border rounded-md">
-                  <h3 className="font-medium">Confirmar Pagamento</h3>
+                <div className="space-y-4 mt-4 p-4 border rounded-md bg-amber-50/50">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-medium">Aguardando Pagamento</h3>
+                    <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-100 px-2 py-1 rounded-full animate-pulse">
+                      <div className="w-2 h-2 bg-amber-600 rounded-full animate-bounce"></div>
+                      Verificando automaticamente...
+                    </div>
+                  </div>
+                  
                   <div className="flex items-center gap-2">
                     <p className="text-sm">Referência do pagamento:</p>
                     <Badge variant="outline" className="font-mono">

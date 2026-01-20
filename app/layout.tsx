@@ -17,6 +17,10 @@ export const metadata: Metadata = {
   description: "Sistema de gestão para pequenos produtores",
   generator: 'v0.dev',
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icons/icon-192x192.png",
+    apple: "/icons/icon-192x192.png", // Fallback para Apple Touch Icon
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

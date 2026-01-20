@@ -640,6 +640,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const checkPaymentStatus = async (): Promise<void> => {
+    await syncSubscriptionWithBackend()
+  }
+
   return (
     <SubscriptionContext.Provider
       value={{
@@ -657,6 +661,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         generatePaymentReference,
         subscribeMercadoPagoPix,
         subscribeMercadoPagoPreference,
+        checkPaymentStatus,
       }}
     >
       {children}
