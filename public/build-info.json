@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
-  "commitHash": "c5d0250c6af8d48860c1fc7057c6517cfeaa3685",
-  "commitMessage": "Correção: Lógica de teste grátis (trial) e novos testes automatizados",
-  "timestamp": "2026-01-20T02:05:18.188Z",
+  "commitHash": "8f30256bcbe85f4d93f23a8d6ac83f12c2234c9f",
+  "commitMessage": "fix: Add manual PWA install button in header to ensure install option is always accessible\n\n- Added PwaInstallButton component that appears when installation is available\n- Integrated install button into DashboardLayout header\n- Provides fallback for when the automatic prompt is dismissed or blocked\n- Includes specific instructions for iOS manual installation",
+  "timestamp": "2026-01-20T02:39:11.012Z",
   "environment": "development"
 }

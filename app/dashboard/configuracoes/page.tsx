@@ -26,7 +26,19 @@ import {
   Save,
   Moon,
   Sun,
-  Loader2
+  Loader2,
+  AlertTriangle,
+  Egg,
+  Bird,
+  DollarSign,
+  Scale,
+  RefreshCw,
+  Trash2,
+  Cloud,
+  Lock,
+  Check,
+  CalendarIcon,
+  Upload
 } from "lucide-react"
 import { BackupService, type BackupMetadata } from "@/services/backup-service"
 
