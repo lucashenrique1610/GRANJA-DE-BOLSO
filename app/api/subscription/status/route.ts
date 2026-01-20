@@ -42,8 +42,8 @@ export async function GET(req: Request) {
       return NextResponse.json({ active: false })
     }
 
-    const trialStart = now.toISOString()
-    const trialEndDate = new Date(now)
+    const trialStart = createdAt.toISOString()
+    const trialEndDate = new Date(createdAt)
     trialEndDate.setDate(trialEndDate.getDate() + 7)
     const trialEnd = trialEndDate.toISOString()
 
@@ -69,7 +69,7 @@ export async function GET(req: Request) {
     }
 
     return NextResponse.json({ active: true, subscription: trialData })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ active: false })
   }
 }

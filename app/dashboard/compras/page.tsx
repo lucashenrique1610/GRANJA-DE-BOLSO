@@ -19,6 +19,7 @@ import { useTips } from "@/contexts/tips-context"
 import { useRouter } from "next/navigation"
 import type { Fornecedor, Compra } from "@/services/data-service"
 
+/*
 interface EstoqueIngredientes {
   milho: number
   soja: number
@@ -30,6 +31,7 @@ interface EstoqueIngredientes {
   nucleo_crescimento: number
   nucleo_postura: number
 }
+*/
 
 export default function ComprasPage() {
   const { toast } = useToast()
@@ -38,17 +40,17 @@ export default function ComprasPage() {
   const [activeTab, setActiveTab] = useState("racao")
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [compras, setCompras] = useState<Compra[]>([])
-  const [estoqueIngredientes, setEstoqueIngredientes] = useState<EstoqueIngredientes>({
-    milho: 0,
-    soja: 0,
-    fuba_fino: 0,
-    fuba_grosso: 0,
-    trigo: 0,
-    calcario_calcitico: 0,
-    nucleo_inicial: 0,
-    nucleo_crescimento: 0,
-    nucleo_postura: 0,
-  })
+  // const [estoqueIngredientes, setEstoqueIngredientes] = useState<EstoqueIngredientes>({
+  //   milho: 0,
+  //   soja: 0,
+  //   fuba_fino: 0,
+  //   fuba_grosso: 0,
+  //   trigo: 0,
+  //   calcario_calcitico: 0,
+  //   nucleo_inicial: 0,
+  //   nucleo_crescimento: 0,
+  //   nucleo_postura: 0,
+  // })
   const [ingredientesDisponiveis, setIngredientesDisponiveis] = useState<any[]>([])
   const [formRacao, setFormRacao] = useState({
     data: new Date().toLocaleDateString("pt-BR"),
@@ -113,9 +115,10 @@ export default function ComprasPage() {
         setActiveTab("racao")
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router])
 
-  const loadData = () => {
+  function loadData() {
     try {
       const fornecedoresData = JSON.parse(localStorage.getItem("fornecedores") || "[]")
       const comprasData = JSON.parse(localStorage.getItem("compras") || "[]")
@@ -465,7 +468,7 @@ export default function ComprasPage() {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
   }
 
-  const checkAlerts = () => {
+  function checkAlerts() {
     // Verificar se há ingredientes com estoque baixo
     const ingredientesData = JSON.parse(localStorage.getItem("ingredientes") || "[]")
     ingredientesData.forEach((ingrediente: any) => {

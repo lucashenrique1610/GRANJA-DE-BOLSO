@@ -19,19 +19,16 @@ import { useToast } from "@/components/ui/use-toast"
 export default function AssinaturaPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { user, requireAuth } = useAuth()
+  const { requireAuth } = useAuth()
   const {
     subscriptionStatus,
     plans,
     isLoading,
-    subscribe,
     cancelSubscription,
-    renewSubscription,
-    confirmPayment,
+    // renewSubscription,
     isInTrial,
     daysLeftInTrial,
     daysLeftInSubscription,
-    generatePaymentReference,
     subscribeMercadoPagoPix,
     subscribeMercadoPagoPreference,
   } = useSubscription()
@@ -71,6 +68,7 @@ export default function AssinaturaPage() {
     }
   }
 
+/*
   const handleRenew = async () => {
     setIsProcessing(true)
     const success = await renewSubscription(selectedPlan)
@@ -81,6 +79,7 @@ export default function AssinaturaPage() {
       router.push("/assinatura/pagamento")
     }
   }
+*/
 
   const handleCancel = async () => {
     if (confirm("Tem certeza que deseja cancelar sua assinatura?")) {

@@ -23,6 +23,7 @@ export default function FornecedoresPage() {
   useEffect(() => {
     const savedFornecedores = localStorage.getItem("fornecedores")
     if (savedFornecedores) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFornecedores(JSON.parse(savedFornecedores))
     }
   }, [])

@@ -2,13 +2,13 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Egg, Check, AlertTriangle } from "lucide-react"
+import { Egg } from "lucide-react"
 import { useAuth } from "@/hooks/use-auth"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
@@ -51,6 +51,7 @@ export default function LoginPage() {
   const [registerPassword, setRegisterPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [awaitingEmailConfirm, setAwaitingEmailConfirm] = useState(false)
+  const [activeTab, setActiveTab] = useState("login")
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -176,7 +177,7 @@ export default function LoginPage() {
           <CardDescription>Gerencie sua granja de forma simples e eficiente</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             {awaitingEmailConfirm && (
               <Alert className="mb-4">
                 <AlertDescription>
@@ -230,7 +231,7 @@ export default function LoginPage() {
                 </form>
               )}
             </TabsContent>
-            <TabsContent value="register">
+            <TabsContent value="register" forceMount>
               <form onSubmit={handleRegister} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Nome</Label>

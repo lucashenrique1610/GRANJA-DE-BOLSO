@@ -20,6 +20,7 @@ export default function RelatoriosPage() {
   useEffect(() => {
     const savedLotes = localStorage.getItem("lotes")
     if (savedLotes) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLotes(JSON.parse(savedLotes))
     }
   }, [])

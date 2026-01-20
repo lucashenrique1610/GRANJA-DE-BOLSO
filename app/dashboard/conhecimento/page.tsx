@@ -146,6 +146,7 @@ export default function ConhecimentoPage() {
     try {
       const raw = localStorage.getItem("knowledgeProgress")
       if (raw) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setProgress(JSON.parse(raw))
       }
     } catch {}

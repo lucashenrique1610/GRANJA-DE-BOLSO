@@ -114,6 +114,7 @@ export default function ControleSaudePage() {
 
   useEffect(() => {
     setTimeout(loadData, 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {

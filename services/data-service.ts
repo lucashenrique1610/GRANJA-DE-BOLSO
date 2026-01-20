@@ -231,10 +231,6 @@ async function fetchClientesSupabase(): Promise<Cliente[]> {
   }
 }
 
-async function createBackupSupabase(): Promise<boolean> {
-  // Deprecated: BackupService handles this now via backend
-  return false
-}
 
 // Funções de acesso aos dados
 export const DataService = {

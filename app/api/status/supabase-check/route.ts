@@ -30,7 +30,7 @@ export async function GET() {
     })
 
     const authCheckStart = performance.now()
-    const { data: authData, error: authError } = await supabase.auth.getSession()
+    const { error: authError } = await supabase.auth.getSession()
     const authLatency = performance.now() - authCheckStart
 
     status.details.auth = {
@@ -41,7 +41,7 @@ export async function GET() {
 
     const dbCheckStart = performance.now()
     
-    const { count, error: dbError } = await supabase
+    const { error: dbError } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
       

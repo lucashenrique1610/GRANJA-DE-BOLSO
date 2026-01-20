@@ -16,7 +16,7 @@ import { useToast } from "@/components/ui/use-toast"
 export default function PagamentoPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { user, requireAuth } = useAuth()
+  const { requireAuth } = useAuth()
   const { subscriptionStatus, isLoading, confirmPayment } = useSubscription()
   const [countdown, setCountdown] = useState(900) // 15 minutos em segundos
   const [isConfirming, setIsConfirming] = useState(false)
@@ -34,6 +34,7 @@ export default function PagamentoPage() {
   useEffect(() => {
     const saved = sessionStorage.getItem("lastPixPayment")
     if (saved) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPixData(JSON.parse(saved))
     } else if (!isLoading && subscriptionStatus.paymentStatus !== "pending") {
        router.push("/assinatura")
@@ -158,6 +159,7 @@ export default function PagamentoPage() {
             <div className="flex justify-center">
               <div className="bg-white p-4 rounded-lg border flex flex-col items-center">
                 {displayBase64 ? (
+                   // eslint-disable-next-line @next/next/no-img-element
                    <img 
                     src={`data:image/png;base64,${displayBase64}`} 
                     alt="QR Code PIX" 

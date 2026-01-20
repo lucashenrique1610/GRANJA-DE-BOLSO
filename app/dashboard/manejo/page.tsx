@@ -29,10 +29,15 @@ export default function ManejoPage() {
   const [lotes, setLotes] = useState<Lote[]>([])
   const [manejoDia, setManejoDia] = useState<ManejoDia>({})
   
+  const [historicoRecs, setHistoricoRecs] = useState<
+    { data: string; loteId: string; resumo: string; clima: ClimaAtual & ClimaDiario }[]
+  >([])
+  
   useEffect(() => {
     try {
       const savedLotes = localStorage.getItem("lotes")
       if (savedLotes) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLotes(JSON.parse(savedLotes))
       }
       const savedManejo = localStorage.getItem("manejoDia")
@@ -99,9 +104,6 @@ export default function ManejoPage() {
   const [climaHoje, setClimaHoje] = useState<ClimaDiario>({ max: 0, min: 0, chuva: 0, data: "" })
   const [recomendacoes, setRecomendacoes] = useState<string[]>([])
   const [alertasClima, setAlertasClima] = useState<string[]>([])
-  const [historicoRecs, setHistoricoRecs] = useState<
-    { data: string; loteId: string; resumo: string; clima: ClimaAtual & ClimaDiario }[]
-  >([])
 
   const carregarClima = useCallback(async (loc: ClimaLocal) => {
     const la = String(loc.lat || "")

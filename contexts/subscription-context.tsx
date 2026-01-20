@@ -132,6 +132,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     loadSubscriptionData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadSubscriptionData = async () => {
@@ -158,13 +159,34 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (!sessionStr) return
 
       let userId = ""
+      let accessToken = ""
       try {
         const session = JSON.parse(sessionStr)
         if (session && session.user && session.user.id) {
           userId = session.user.id
         }
+        if (session && session.access_token) {
+          accessToken = session.access_token
+        }
       } catch {
         return
+      }
+
+      if (!userId && accessToken) {
+        try {
+          const resUser = await fetch("/api/auth/user", {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          })
+          if (resUser.ok) {
+            const dataUser = await resUser.json()
+            if (dataUser && dataUser.user && dataUser.user.id) {
+              userId = dataUser.user.id
+            }
+          }
+        } catch {
+        }
       }
 
       if (!userId) return
@@ -602,7 +624,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         try {
            const errData = await response.json();
            errorMsg = errData.details || errorMsg;
-        } catch(e) {
+        } catch {
            // ignore json parse error
         }
         throw new Error(errorMsg)

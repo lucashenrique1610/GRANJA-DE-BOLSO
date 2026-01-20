@@ -4,7 +4,7 @@ import { mercadopago } from "@/lib/mercadopago"
 import { supabaseAdmin } from "@/lib/supabase-admin"
 
 export async function POST(req: Request) {
-  const requestId = crypto.randomUUID()
+  // const requestId = crypto.randomUUID()
   try {
     if (!mercadopago) {
       return new NextResponse("Mercado Pago não configurado", { status: 500 })
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       })
     }
     return NextResponse.json({ confirmed: true, status: "approved" })
-  } catch (error) {
+  } catch {
     return new NextResponse("Erro interno", { status: 500 })
   }
 }

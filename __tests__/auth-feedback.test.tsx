@@ -8,8 +8,8 @@ import { Toaster } from "@/components/ui/toaster"
 vi.mock("@/hooks/use-auth", () => {
   return {
     useAuth: () => ({
-      login: async (email: string, password: string) => ({ ok: false, unconfirmed: true }),
-      register: async (nome: string, email: string, password: string) => true,
+      login: async (_email: string, _password: string) => ({ ok: false, unconfirmed: true }),
+      register: async (_nome: string, _email: string, _password: string) => ({ ok: true }),
       sendPasswordReset: async () => true,
       completePasswordReset: async () => true,
       needsPasswordReset: false,
@@ -33,9 +33,9 @@ describe("Auth feedback messages", () => {
       </>,
     )
 
-    const cadastroTab = screen.getByText("Cadastro")
-    fireEvent.pointerDown(cadastroTab)
+    const cadastroTab = screen.getByRole("tab", { name: /Cadastro/i })
     fireEvent.click(cadastroTab)
+    await screen.findByRole("button", { name: /Cadastrar/i })
 
     const cadastrarBtn = await screen.findByText("Cadastrar")
     const form = cadastrarBtn.closest("form") as HTMLFormElement

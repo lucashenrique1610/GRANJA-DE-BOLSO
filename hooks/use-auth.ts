@@ -219,7 +219,7 @@ export function useAuth() {
   // My previous implementation of /api/auth/update only took `data`.
   // I should update /api/auth/update to handle password or attributes.
 
-  const resendEmailConfirmation = async (email: string): Promise<boolean> => {
+  const resendEmailConfirmation = async (_email: string): Promise<boolean> => {
      // Not implemented in backend yet, but can be added.
      return false
   }

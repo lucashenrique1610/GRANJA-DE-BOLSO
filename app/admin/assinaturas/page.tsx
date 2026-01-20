@@ -28,7 +28,7 @@ interface PendingSubscription {
 
 export default function AdminAssinaturasPage() {
   const { toast } = useToast()
-  const { user, requireAuth } = useAuth()
+  const { requireAuth } = useAuth()
   const [pendingSubscriptions, setPendingSubscriptions] = useState<PendingSubscription[]>([])
   const [referenceInput, setReferenceInput] = useState("")
   const [isLoading, setIsLoading] = useState(true)
@@ -89,7 +89,7 @@ export default function AdminAssinaturasPage() {
             title: "Assinatura confirmada",
             description: "O usuário agora tem acesso ao sistema.",
         })
-    } catch (e) {
+    } catch {
         toast({
             title: "Erro",
             description: "Não foi possível confirmar a assinatura.",

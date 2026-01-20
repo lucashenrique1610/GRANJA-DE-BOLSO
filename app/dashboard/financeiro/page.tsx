@@ -28,16 +28,18 @@ export default function FinanceiroPage() {
     lucroLote: 0,
   })
   const [categoriasDespesas, setCategoriasDespesas] = useState<{ [key: string]: number }>({})
-  const [chartInstance, setChartInstance] = useState<any>(null)
+  // const [chartInstance, setChartInstance] = useState<any>(null)
 
   useEffect(() => {
     // Load data from localStorage
     loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
     // Update financial data when lote selection changes
     atualizarFinanceiro()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedLote, vendas, compras, lotes])
 
   const loadData = () => {
@@ -59,7 +61,7 @@ export default function FinanceiroPage() {
     }
   }
 
-  const atualizarFinanceiro = () => {
+  function atualizarFinanceiro() {
     // Calculate revenues and expenses
     let receitas = vendas.reduce((sum, v) => sum + v.valor, 0)
     let despesas = compras.reduce((sum, c) => sum + c.valor, 0) + lotes.reduce((sum, l) => sum + l.valorLote, 0)
@@ -93,7 +95,7 @@ export default function FinanceiroPage() {
     atualizarGraficoFluxoCaixa(receitas, despesas, lucroLiquido)
   }
 
-  const atualizarCustoPorLote = (loteId: string) => {
+  function atualizarCustoPorLote(loteId: string) {
     if (!loteId || loteId === "todos") return
 
     const lote = lotes.find((l) => l.id === loteId)
@@ -123,7 +125,7 @@ export default function FinanceiroPage() {
     })
   }
 
-  const atualizarCategoriasDespesas = () => {
+  function atualizarCategoriasDespesas() {
     const categorias: { [key: string]: number } = {
       Ração: 0,
       Veterinário: 0,
@@ -156,19 +158,19 @@ export default function FinanceiroPage() {
     setCategoriasDespesas(categorias)
   }
 
-  const atualizarGraficoFluxoCaixa = (receitas: number, despesas: number, lucro: number) => {
+  function atualizarGraficoFluxoCaixa(receitas: number, despesas: number, lucro: number) {
     // In a real implementation, this would use Chart.js to render a chart
     // For this example, we'll just update the state
     setChartInstance({ receitas, despesas, lucro })
   }
 
   const exportarRelatorioFinanceiro = () => {
-    const dados = [
-      ["Data", "Categoria", "Descrição", "Valor"],
-      ...vendas.map((v) => [v.data, "Receita", v.produto, v.valor]),
-      ...compras.map((c) => [c.data, "Despesa", c.categoria, c.valor]),
-      ...lotes.map((l) => [l.dataCompra, "Despesa", "Compra de Lote", l.valorLote]),
-    ]
+    // const dados = [
+    //   ["Data", "Categoria", "Descrição", "Valor"],
+    //   ...vendas.map((v) => [v.data, "Receita", v.produto, v.valor]),
+    //   ...compras.map((c) => [c.data, "Despesa", c.categoria, c.valor]),
+    //   ...lotes.map((l) => [l.dataCompra, "Despesa", "Compra de Lote", l.valorLote]),
+    // ]
 
     // In a real implementation, this would create a CSV file for download
     toast({

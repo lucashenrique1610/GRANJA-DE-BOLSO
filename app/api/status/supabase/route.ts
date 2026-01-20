@@ -19,7 +19,7 @@ export async function GET() {
     }
 
     // Attempt a light request (it might fail 401 but that means we reached the server)
-    const { error } = await supabase.from('profiles').select('id').limit(1)
+    await supabase.from('profiles').select('id').limit(1)
     
     // If error is connection refused or similar, it's bad.
     // If error is 401/403 (RLS), it means we connected successfully.

@@ -47,11 +47,6 @@ export default function AnimaisPage() {
     machos: "",
   })
 
-  useEffect(() => {
-    // Load data from localStorage
-    loadData()
-  }, [])
-
   const loadData = () => {
     try {
       const lotesData = JSON.parse(localStorage.getItem("lotes") || "[]")
@@ -70,6 +65,12 @@ export default function AnimaisPage() {
       })
     }
   }
+
+  useEffect(() => {
+    // Load data from localStorage
+    loadData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleCadastroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target

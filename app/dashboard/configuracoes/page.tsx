@@ -24,25 +24,9 @@ import {
   Database,
   Download,
   Save,
-  Bell,
   Moon,
   Sun,
-  Smartphone,
-  Tablet,
-  Monitor,
-  AlertTriangle,
-  Check,
-  Egg,
-  Bird,
-  DollarSign,
-  Scale,
-  RefreshCw,
-  Trash2,
-  Upload,
-  Cloud,
-  Lock,
-  Loader2,
-  Calendar as CalendarIcon
+  Loader2
 } from "lucide-react"
 import { BackupService, type BackupMetadata } from "@/services/backup-service"
 
@@ -92,6 +76,7 @@ export default function ConfiguracoesPage() {
     }
     const key = localStorage.getItem("backup_auto_key")
     if (key) setBackupPassword(key)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
 
   const loadCloudBackups = async () => {

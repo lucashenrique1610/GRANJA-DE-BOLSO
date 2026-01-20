@@ -266,6 +266,59 @@ export default function FormulacaoPage() {
     setPrevisaoDuracao(resultado)
   }
 
+  const calcularValoresNutricionais = () => {
+    if (novaFormulacao.itens.length === 0 || ingredientes.length === 0) {
+      setValoresNutricionais({
+        proteina: 0,
+        energia: 0,
+        calcio: 0,
+        fosforo: 0,
+        metionina: 0,
+        lisina: 0,
+        fibra: 0,
+        custo: 0,
+      })
+      return
+    }
+
+    // Inicializar valores
+    let proteina = 0
+    let energia = 0
+    let calcio = 0
+    let fosforo = 0
+    let metionina = 0
+    let lisina = 0
+    let fibra = 0
+    let custo = 0
+
+    // Calcular valores nutricionais baseados na percentagem de cada ingrediente
+    novaFormulacao.itens.forEach((item) => {
+      const ingrediente = ingredientes.find((ing) => ing.id === item.ingredienteId)
+      if (ingrediente && item.percentual > 0) {
+        const fator = item.percentual / 100
+        proteina += ingrediente.proteina * fator
+        energia += ingrediente.energia * fator
+        calcio += ingrediente.calcio * fator
+        fosforo += ingrediente.fosforo * fator
+        metionina += ingrediente.metionina * fator
+        lisina += ingrediente.lisina * fator
+        fibra += ingrediente.fibra * fator
+        custo += ingrediente.preco * fator
+      }
+    })
+
+    setValoresNutricionais({
+      proteina,
+      energia,
+      calcio,
+      fosforo,
+      metionina,
+      lisina,
+      fibra,
+      custo,
+    })
+  }
+
   useEffect(() => {
     // Carregar dados do localStorage
     loadData()
@@ -274,6 +327,7 @@ export default function FormulacaoPage() {
   useEffect(() => {
     // Calcular valores nutricionais quando a formulação muda
     calcularValoresNutricionais()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [novaFormulacao.itens, ingredientes])
 
   useEffect(() => {
@@ -303,6 +357,7 @@ export default function FormulacaoPage() {
     } else {
       setPrevisaoDuracao(null)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loteSelecionado, novaFormulacao.fase, ajusteAmbiental])
 
   const loadData = () => {
@@ -492,58 +547,6 @@ export default function FormulacaoPage() {
     }))
   }
 
-  const calcularValoresNutricionais = () => {
-    if (novaFormulacao.itens.length === 0 || ingredientes.length === 0) {
-      setValoresNutricionais({
-        proteina: 0,
-        energia: 0,
-        calcio: 0,
-        fosforo: 0,
-        metionina: 0,
-        lisina: 0,
-        fibra: 0,
-        custo: 0,
-      })
-      return
-    }
-
-    // Inicializar valores
-    let proteina = 0
-    let energia = 0
-    let calcio = 0
-    let fosforo = 0
-    let metionina = 0
-    let lisina = 0
-    let fibra = 0
-    let custo = 0
-
-    // Calcular valores nutricionais baseados na percentagem de cada ingrediente
-    novaFormulacao.itens.forEach((item) => {
-      const ingrediente = ingredientes.find((ing) => ing.id === item.ingredienteId)
-      if (ingrediente && item.percentual > 0) {
-        const fator = item.percentual / 100
-        proteina += ingrediente.proteina * fator
-        energia += ingrediente.energia * fator
-        calcio += ingrediente.calcio * fator
-        fosforo += ingrediente.fosforo * fator
-        metionina += ingrediente.metionina * fator
-        lisina += ingrediente.lisina * fator
-        fibra += ingrediente.fibra * fator
-        custo += ingrediente.preco * fator
-      }
-    })
-
-    setValoresNutricionais({
-      proteina,
-      energia,
-      calcio,
-      fosforo,
-      metionina,
-      lisina,
-      fibra,
-      custo,
-    })
-  }
 
   const verificarRequisitosNutricionais = () => {
     const requisitos = requisitosNutricionais.find((req) => req.fase === novaFormulacao.fase)

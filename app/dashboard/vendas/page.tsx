@@ -33,6 +33,7 @@ export default function VendasPage() {
 
   useEffect(() => {
     const savedClientes = localStorage.getItem("clientes")
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (savedClientes) setClientes(JSON.parse(savedClientes))
 
     const savedVendas = localStorage.getItem("vendas")
