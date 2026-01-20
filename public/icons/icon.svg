@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#16a34a"/>
+  <path d="M256 64L64 256h48v192h96V320h96v128h96V256h48L256 64z" fill="#ffffff"/>
+  <text x="50%" y="70%" dominant-baseline="middle" text-anchor="middle" font-family="Arial" font-size="60" fill="white">Granja Bolso</text>
+</svg>

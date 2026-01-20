@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
-  "commitHash": "3b0a9a53b5ec561dc17937284560aa3e6fdee36f",
-  "commitMessage": "feat(trial): integrar período de teste de 7 dias com Supabase; alerta 24h no dashboard; sincronização de assinatura via sessão do usuário",
-  "timestamp": "2026-01-18T05:21:08.902Z",
+  "commitHash": "c5d0250c6af8d48860c1fc7057c6517cfeaa3685",
+  "commitMessage": "Correção: Lógica de teste grátis (trial) e novos testes automatizados",
+  "timestamp": "2026-01-20T02:05:18.188Z",
   "environment": "development"
 }

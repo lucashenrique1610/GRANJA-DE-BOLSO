@@ -14,6 +14,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@ducanh2912/next-pwa": "^10.2.9",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",
@@ -60,6 +61,7 @@
     "react-hook-form": "^7.54.1",
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.0",
+    "sharp": "^0.34.5",
     "sonner": "^1.7.1",
     "stripe": "^20.1.0",
     "tailwind-merge": "^2.5.5",

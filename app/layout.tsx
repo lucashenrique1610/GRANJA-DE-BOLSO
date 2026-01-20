@@ -1,5 +1,5 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -7,13 +7,27 @@ import { Toaster } from "@/components/ui/toaster"
 import { ConfigProvider } from "@/contexts/config-context"
 import { SubscriptionProvider } from "@/contexts/subscription-context"
 import { TipsProvider } from "@/contexts/tips-context"
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
   title: "Granja de Bolso",
   description: "Sistema de gestão para pequenos produtores",
-    generator: 'v0.dev'
+  generator: 'v0.dev',
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Granja Bolso",
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: "#16a34a",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 }
 
 export default function RootLayout({
@@ -29,6 +43,7 @@ export default function RootLayout({
             <SubscriptionProvider>
               <TipsProvider>
                 {children}
+                <PwaInstallPrompt />
                 <Toaster />
               </TipsProvider>
             </SubscriptionProvider>
