@@ -7,6 +7,8 @@ import { useConfig } from "@/contexts/config-context"
 import Image from "next/image"
 import { WeatherImpact } from "@/components/weather-impact"
 import { WeatherCharts } from "@/components/weather-charts"
+import { WeatherSkeleton } from "@/components/weather-skeleton"
+import { Bell, BellOff } from "lucide-react"
 
 type HourItem = { time: string; icon?: string; temp: number }
 type OWCurrent = {
@@ -43,6 +45,64 @@ export default function ClimaPage() {
   const [sunText, setSunText] = useState("")
   const [icon, setIcon] = useState<string | undefined>(undefined)
   const [hourly, setHourly] = useState<HourItem[]>([])
+  
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false)
+  const lastNotificationTime = useRef<number>(0)
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+      setNotificationsEnabled(true)
+    }
+  }, [])
+
+  const requestNotificationPermission = async () => {
+    if (!("Notification" in window)) {
+      alert("Este navegador não suporta notificações.")
+      return
+    }
+    
+    if (notificationsEnabled) {
+       // Opcional: Desativar (apenas visualmente, pois não dá para revogar permissão via JS)
+       setNotificationsEnabled(false)
+       return
+    }
+
+    const permission = await Notification.requestPermission()
+    if (permission === "granted") {
+      setNotificationsEnabled(true)
+      new Notification("Alertas de Clima Ativados", {
+        body: "O Sistema Granja Bolso irá alertá-lo sobre condições críticas.",
+        icon: "/icons/icon-192x192.png"
+      })
+    }
+  }
+
+  const checkAndNotify = (currentTemp: number, currentWind: number) => {
+    if (!notificationsEnabled) return
+    
+    // Evitar notificações frequentes (máximo 1 a cada 30 min)
+    const now = Date.now()
+    if (now - lastNotificationTime.current < 30 * 60 * 1000) return
+
+    let title = ""
+    let body = ""
+
+    if (currentTemp >= 30) {
+      title = "⚠️ Alerta de Calor Extremo"
+      body = `Temperatura atingiu ${currentTemp}°C. Risco de mortalidade. Ative a ventilação!`
+    } else if (currentTemp <= 15) {
+      title = "⚠️ Alerta de Frio"
+      body = `Temperatura caiu para ${currentTemp}°C. Verifique o aquecimento.`
+    } else if (currentWind >= 20) {
+      title = "⚠️ Vento Forte"
+      body = `Ventos de ${currentWind} km/h detectados. Proteja as cortinas.`
+    }
+
+    if (title) {
+      new Notification(title, { body, icon: "/icons/icon-192x192.png" })
+      lastNotificationTime.current = now
+    }
+  }
 
   const currentUrl = "https://api.openweathermap.org/data/2.5/weather?units=metric&lang=pt_br"
   const forecastUrl = "https://api.openweathermap.org/data/2.5/forecast?units=metric&lang=pt_br"
@@ -83,6 +143,9 @@ export default function ClimaPage() {
     setIcon(ic || undefined)
     const isDay = ic.includes("d")
     setBackground(String(data?.weather?.[0]?.main || ""), isDay)
+    
+    // Verificar alertas
+    checkAndNotify(Number(data?.main?.temp ?? 0), Math.round(Number(data?.wind?.speed ?? 0) * 3.6))
   }
 
   const updateHourlyFromOW = (data: OWForecast) => {
@@ -150,6 +213,10 @@ export default function ClimaPage() {
           setSunText("")
           setIcon(undefined)
           setBackground(String(c?.weather || ""), true)
+          
+          // Verificar alertas
+          checkAndNotify(Number(c?.temp ?? 0), Math.round(Number(c?.wind_speed ?? 0) * 3.6))
+
           try {
             const resolved = await GeoService.resolveCityName(String(lat), String(lon), config)
             if (resolved) {
@@ -287,96 +354,109 @@ export default function ClimaPage() {
             >
               Localização
             </button>
+            <button
+              onClick={requestNotificationPermission}
+              className={`px-5 rounded-full cursor-pointer text-xl flex items-center gap-2 transition-colors ${notificationsEnabled ? "bg-green-500/20 text-white border border-green-500/50" : "bg-white/20 text-white/70"}`}
+              title={notificationsEnabled ? "Notificações Ativadas" : "Ativar Alertas"}
+            >
+              {notificationsEnabled ? <Bell className="h-5 w-5 fill-current" /> : <BellOff className="h-5 w-5" />}
+            </button>
           </div>
 
-          {loading && (
-            <div id="loading" className="text-center py-12 text-lg">Detectando sua localização...</div>
-          )}
+          {loading ? (
+             <WeatherSkeleton />
+          ) : (
+             <>
+                {!error && (
+                  <div className="text-center py-4 text-sm hidden"></div> 
+                )}
 
-          {!loading && error && (
-            <div className="text-center py-4 text-sm">{error}</div>
-          )}
-
-          {!loading && !error && canShowCurrent && (
-            <div id="currentWeather" className="text-center my-5">
-              <h2 id="cityName" className="text-xl font-semibold">{cityName}{country ? ", " + country : ""}</h2>
-              {icon ? (
-                <Image id="weatherIcon" className="mx-auto my-4" src={`https://openweathermap.org/img/wn/${icon}@4x.png`} alt="ícone do clima" width={160} height={160} />
-              ) : null}
-              <div id="temp" className="text-6xl font-bold">
-                {temp !== null ? Math.round(temp) : "—"}
-                <span className="align-super text-3xl">°C</span>
-              </div>
-              <div id="description" className="text-xl my-3 capitalize">{description}</div>
-              <div className="text-base mt-2 opacity-90">
-                Máx: <span id="tempMax">{tempMax !== null ? Math.round(tempMax) + "°" : "—"}</span> | Mín: <span id="tempMin">{tempMin !== null ? Math.round(tempMin) + "°" : "—"}</span>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3 my-7">
-            <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
-              <i className="fas fa-tint text-2xl mb-2" aria-hidden="true" />
-              <div className="text-sm opacity-80">Umidade</div>
-              <div id="humidity" className="text-xl font-semibold mt-1">{humidity !== null ? `${humidity}%` : "—"}</div>
-            </div>
-            <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
-              <i className="fas fa-wind text-2xl mb-2" aria-hidden="true" />
-              <div className="text-sm opacity-80">Vento</div>
-              <div id="wind" className="text-xl font-semibold mt-1">{windKmh !== null ? `${windKmh} km/h` : "—"}</div>
-            </div>
-            <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
-              <i className="fas fa-thermometer-half text-2xl mb-2" aria-hidden="true" />
-              <div className="text-sm opacity-80">Sensação</div>
-              <div id="feelsLike" className="text-xl font-semibold mt-1">{feelsLike !== null ? `${Math.round(feelsLike)}°C` : "—"}</div>
-            </div>
-            <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
-              <i className="fas fa-eye text-2xl mb-2" aria-hidden="true" />
-              <div className="text-sm opacity-80">Visibilidade</div>
-              <div id="visibility" className="text-xl font-semibold mt-1">{visibilityKm || "—"}</div>
-            </div>
-            <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
-              <i className="fas fa-tachometer-alt text-2xl mb-2" aria-hidden="true" />
-              <div className="text-sm opacity-80">Pressão</div>
-              <div id="pressure" className="text-xl font-semibold mt-1">{pressure !== null ? `${pressure} hPa` : "—"}</div>
-            </div>
-            <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
-              <i className="fas fa-sun text-2xl mb-2" aria-hidden="true" />
-              <div className="text-sm opacity-80">Nascer / Pôr</div>
-              <div id="sun" className="text-xl font-semibold mt-1">{sunText || "—"}</div>
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <h3 className="text-center my-4 text-lg">Próximas 6 horas</h3>
-            <div id="hourlyForecast" className="flex gap-3 overflow-x-auto py-3 no-scrollbar">
-              {hourly.map((h, i) => (
-                <div key={i} className="min-w-[76px] bg-white/18 p-4 rounded-2xl text-center">
-                  <div className="text-sm opacity-90">{h.time}</div>
-                  {h.icon ? (
-                    <Image src={`https://openweathermap.org/img/wn/${h.icon}.png`} alt="" width={42} height={42} className="mx-auto my-1" />
-                  ) : null}
-                  <div className="font-semibold">{h.temp}°</div>
+                {error && (
+                  <div className="text-center py-4 text-sm">{error}</div>
+                )}
+      
+                {!error && canShowCurrent && (
+                  <div id="currentWeather" className="text-center my-5">
+                    <h2 id="cityName" className="text-xl font-semibold">{cityName}{country ? ", " + country : ""}</h2>
+                    {icon ? (
+                      <Image id="weatherIcon" className="mx-auto my-4" src={`https://openweathermap.org/img/wn/${icon}@4x.png`} alt="ícone do clima" width={160} height={160} />
+                    ) : null}
+                    <div id="temp" className="text-6xl font-bold">
+                      {temp !== null ? Math.round(temp) : "—"}
+                      <span className="align-super text-3xl">°C</span>
+                    </div>
+                    <div id="description" className="text-xl my-3 capitalize">{description}</div>
+                    <div className="text-base mt-2 opacity-90">
+                      Máx: <span id="tempMax">{tempMax !== null ? Math.round(tempMax) + "°" : "—"}</span> | Mín: <span id="tempMin">{tempMin !== null ? Math.round(tempMin) + "°" : "—"}</span>
+                    </div>
+                  </div>
+                )}
+      
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-3 my-7">
+                  <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
+                    <i className="fas fa-tint text-2xl mb-2" aria-hidden="true" />
+                    <div className="text-sm opacity-80">Umidade</div>
+                    <div id="humidity" className="text-xl font-semibold mt-1">{humidity !== null ? `${humidity}%` : "—"}</div>
+                  </div>
+                  <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
+                    <i className="fas fa-wind text-2xl mb-2" aria-hidden="true" />
+                    <div className="text-sm opacity-80">Vento</div>
+                    <div id="wind" className="text-xl font-semibold mt-1">{windKmh !== null ? `${windKmh} km/h` : "—"}</div>
+                  </div>
+                  <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
+                    <i className="fas fa-thermometer-half text-2xl mb-2" aria-hidden="true" />
+                    <div className="text-sm opacity-80">Sensação</div>
+                    <div id="feelsLike" className="text-xl font-semibold mt-1">{feelsLike !== null ? `${Math.round(feelsLike)}°C` : "—"}</div>
+                  </div>
+                  <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
+                    <i className="fas fa-eye text-2xl mb-2" aria-hidden="true" />
+                    <div className="text-sm opacity-80">Visibilidade</div>
+                    <div id="visibility" className="text-xl font-semibold mt-1">{visibilityKm || "—"}</div>
+                  </div>
+                  <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
+                    <i className="fas fa-tachometer-alt text-2xl mb-2" aria-hidden="true" />
+                    <div className="text-sm opacity-80">Pressão</div>
+                    <div id="pressure" className="text-xl font-semibold mt-1">{pressure !== null ? `${pressure} hPa` : "—"}</div>
+                  </div>
+                  <div className="bg-white/12 p-4 rounded-2xl text-center border border-white/10">
+                    <i className="fas fa-sun text-2xl mb-2" aria-hidden="true" />
+                    <div className="text-sm opacity-80">Nascer / Pôr</div>
+                    <div id="sun" className="text-xl font-semibold mt-1">{sunText || "—"}</div>
+                  </div>
                 </div>
-              ))}
-              {hourly.length === 0 && (
-                <div className="text-sm text-center w-full">Sem dados</div>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-             <div className="space-y-6">
-                {temp !== null && humidity !== null && windKmh !== null && (
-                  <WeatherImpact temp={temp} humidity={humidity} windKmh={windKmh} />
-                )}
-             </div>
-             <div className="space-y-6">
-                {hourly.length > 0 && (
-                  <WeatherCharts data={hourly} />
-                )}
-             </div>
-          </div>
+      
+                <div className="mt-6">
+                  <h3 className="text-center my-4 text-lg">Próximas 6 horas</h3>
+                  <div id="hourlyForecast" className="flex gap-3 overflow-x-auto py-3 no-scrollbar">
+                    {hourly.map((h, i) => (
+                      <div key={i} className="min-w-[76px] bg-white/18 p-4 rounded-2xl text-center">
+                        <div className="text-sm opacity-90">{h.time}</div>
+                        {h.icon ? (
+                          <Image src={`https://openweathermap.org/img/wn/${h.icon}.png`} alt="" width={42} height={42} className="mx-auto my-1" />
+                        ) : null}
+                        <div className="font-semibold">{h.temp}°</div>
+                      </div>
+                    ))}
+                    {hourly.length === 0 && (
+                      <div className="text-sm text-center w-full">Sem dados</div>
+                    )}
+                  </div>
+                </div>
+      
+                 <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-6">
+                       {temp !== null && humidity !== null && windKmh !== null && (
+                         <WeatherImpact temp={temp} humidity={humidity} windKmh={windKmh} />
+                       )}
+                    </div>
+                    <div className="space-y-6">
+                       {hourly.length > 0 && (
+                         <WeatherCharts data={hourly} />
+                       )}
+                    </div>
+                 </div>
+             </>
+          )}
         </div>
         <style jsx>{`
           .clima-pro .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
