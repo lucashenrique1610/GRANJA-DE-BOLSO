@@ -25,7 +25,7 @@ Para que a funcionalidade PWA funcione corretamente, o usuário deve utilizar um
 
 *   **Google Chrome** (Desktop e Mobile): Suporte completo.
 *   **Microsoft Edge**: Suporte completo.
-*   **Safari (iOS/macOS)**: Suporte parcial (instalação via "Adicionar à Tela de Início", sem prompt automático).
+*   **Safari (iOS/macOS)**: Suporte via instruções manuais integradas na interface (sem prompt nativo, mas com suporte a standalone).
 *   **Firefox**: Suporte completo (Android), suporte parcial (Desktop).
 
 ## Guia de Desenvolvimento

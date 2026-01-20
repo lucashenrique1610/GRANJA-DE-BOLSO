@@ -88,4 +88,18 @@ describe('PwaInstallPrompt', () => {
     const button = screen.queryByText('Adicionar à Tela Inicial')
     expect(button).not.toBeInTheDocument()
   })
+
+  it('renders iOS instructions when on iOS device', async () => {
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1',
+      writable: true
+    })
+
+    render(<PwaInstallPrompt />)
+    
+    // We expect it to show up immediately on iOS if not dismissed
+    const title = await screen.findByText(/Instale o Granja Bolso no seu iPhone/i)
+    expect(title).toBeInTheDocument()
+    expect(screen.getByText(/Adicionar à Tela de Início/i)).toBeInTheDocument()
+  })
 })
