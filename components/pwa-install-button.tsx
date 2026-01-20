@@ -1,0 +1,102 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Download, Share } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+
+export function PwaInstallButton() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null)
+  const [isIOS, setIsIOS] = useState(false)
+  const [isStandalone, setIsStandalone] = useState(false)
+  const [mounted, setMounted] = useState(false)
+  const [showIOSHelp, setShowIOSHelp] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
+    setIsIOS(isIOSDevice)
+    setIsStandalone(window.matchMedia("(display-mode: standalone)").matches)
+
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+    }
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+    }
+  }, [])
+
+  const handleInstallClick = async () => {
+    if (isIOS) {
+      setShowIOSHelp(true)
+      return
+    }
+
+    if (!deferredPrompt) return
+
+    deferredPrompt.prompt()
+    const { outcome } = await deferredPrompt.userChoice
+    if (outcome === "accepted") {
+      setDeferredPrompt(null)
+    }
+  }
+
+  if (!mounted || isStandalone) return null
+  
+  // Show if we have a prompt (Android/Desktop) or if it's iOS
+  if (!deferredPrompt && !isIOS) return null
+
+  if (isIOS) {
+    return (
+      <Dialog open={showIOSHelp} onOpenChange={setShowIOSHelp}>
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2 border-primary/20 hover:bg-primary/5">
+            <Download className="h-4 w-4 text-primary" />
+            <span className="hidden sm:inline">Instalar App</span>
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Instalar no iPhone/iPad</DialogTitle>
+            <DialogDescription>
+              Siga os passos abaixo para instalar o aplicativo:
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">1</div>
+              <p>Toque no botão <span className="font-semibold">Compartilhar</span> <Share className="h-4 w-4 inline" /></p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary font-bold">2</div>
+              <p>Role para baixo e selecione <span className="font-semibold">Adicionar à Tela de Início</span></p>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  return (
+    <Button 
+      variant="outline" 
+      size="sm" 
+      onClick={handleInstallClick}
+      className="gap-2 border-primary/20 hover:bg-primary/5"
+    >
+      <Download className="h-4 w-4 text-primary" />
+      <span className="hidden sm:inline">Instalar App</span>
+    </Button>
+  )
+}

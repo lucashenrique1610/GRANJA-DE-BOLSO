@@ -259,6 +259,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           <div className="flex-1 flex items-center justify-end gap-4">
             <div className="hidden md:block text-sm text-muted-foreground">{currentDate}</div>
+            <PwaInstallButton />
             <Button
               variant="outline"
               size="icon"
