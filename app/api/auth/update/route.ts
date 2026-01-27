@@ -20,26 +20,20 @@ export async function POST(req: Request) {
     if (updateData) updates.data = updateData
     if (password) updates.password = password
 
+    // Update auth user metadata
     const { error } = await supabase.auth.updateUser(updates)
 
     if (error) {
+      console.error("Error updating auth user:", error)
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
     
-    // If name/phone were updated, also update profiles table
-    if (updateData && (updateData.nome || updateData.telefone)) {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-             await supabase.from("profiles").upsert({
-                id: user.id,
-                nome: updateData.nome,
-                telefone: updateData.telefone
-            })
-        }
-    }
-
+    // Profiles table is not currently used/created in migration, 
+    // so we rely solely on user_metadata for now.
+    
     return NextResponse.json({ success: true })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    console.error("API update error:", e)
+    return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 })
   }
 }
