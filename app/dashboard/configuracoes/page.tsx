@@ -48,6 +48,7 @@ export default function ConfiguracoesPage() {
   const { config, updateNotificacoes, updateUnidades, updateSistema, setTema, updateClima } = useConfig()
   const [activeTab, setActiveTab] = useState("perfil")
   const [supabaseStatus, setSupabaseStatus] = useState<"idle" | "ok" | "error">("idle")
+  const [loadingConnection, setLoadingConnection] = useState(false)
 
   // Configurações de perfil
   const [perfilForm, setPerfilForm] = useState({
@@ -286,16 +287,23 @@ export default function ConfiguracoesPage() {
     })
   }
 
-  const testarConexao = async () => {
+  const testarConexao = async (manual = false) => {
+    setLoadingConnection(true)
     const res = await DataService.testSupabaseConnection()
+    setLoadingConnection(false)
+
     if (res.ok) {
-      toast({ title: "Supabase", description: "Conexão bem-sucedida" })
+      if (manual) toast({ title: "Supabase", description: "Conexão bem-sucedida" })
       setSupabaseStatus("ok")
     } else {
-      toast({ title: "Supabase", description: res.error || "Falha na conexão", variant: "destructive" })
+      if (manual) toast({ title: "Supabase", description: res.error || "Falha na conexão", variant: "destructive" })
       setSupabaseStatus("error")
     }
   }
+
+  useEffect(() => {
+    testarConexao()
+  }, [])
 
   const gerarBackup = () => {
     try {
@@ -909,7 +917,9 @@ export default function ConfiguracoesPage() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                       <Button variant="outline" size="sm" onClick={testarConexao}>Verificar Conexão</Button>
+                       <Button variant="outline" size="sm" onClick={() => testarConexao(true)} disabled={loadingConnection}>
+                       {loadingConnection ? "Verificando..." : "Verificar Conexão"}
+                     </Button>
                        <Badge variant={supabaseStatus === "ok" ? "default" : supabaseStatus === "error" ? "destructive" : "outline"}>
                          {supabaseStatus === "ok" ? "Conectado" : supabaseStatus === "error" ? "Erro" : "Verificar"}
                        </Badge>
