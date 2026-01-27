@@ -45,6 +45,7 @@ import { formatDateExtended } from "@/lib/date-utils"
 import { SubscriptionCheck } from "@/components/subscription-check"
 import { useSubscription } from "@/contexts/subscription-context"
 import { PwaInstallButton } from "@/components/pwa-install-button"
+import { SyncIndicator } from "@/components/sync-indicator"
 import { Badge } from "@/components/ui/badge"
 
 interface DashboardLayoutProps {
@@ -260,6 +261,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
           <div className="flex-1 flex items-center justify-end gap-4">
             <div className="hidden md:block text-sm text-muted-foreground">{currentDate}</div>
+            <SyncIndicator />
             <PwaInstallButton />
             <Button
               variant="outline"

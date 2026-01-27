@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     if (token === "mock-access-token") {
        return NextResponse.json({ 
          user: {
-           id: "mock-user-id",
+           id: "123e4567-e89b-12d3-a456-426614174000",
            email: "teste@exemplo.com",
            user_metadata: { nome: "Usuário Teste", telefone: "999999999" }
          } 

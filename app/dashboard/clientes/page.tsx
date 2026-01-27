@@ -128,16 +128,16 @@ export default function ClientesPage() {
   const cadastrarClienteJuridico = () => {
     const { nome, endereco, telefone, cnpj } = formJuridico
 
-    if (!nome || !endereco || !telefone || !cnpj) {
+    if (!nome || !endereco || !telefone) {
       toast({
         title: "Erro",
-        description: "Preencha todos os campos!",
+        description: "Preencha todos os campos obrigatórios!",
         variant: "destructive",
       })
       return
     }
 
-    if (clientes.some((c) => c.cpfCnpj === cnpj)) {
+    if (cnpj && clientes.some((c) => c.cpfCnpj === cnpj)) {
       toast({
         title: "Erro",
         description: "CNPJ já cadastrado!",

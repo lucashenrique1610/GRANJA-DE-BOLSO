@@ -3,6 +3,8 @@
  * Encapsula operações de leitura e escrita no localStorage
  */
 
+import { syncService } from "./sync-service"
+
 // Tipos de dados
 export interface Lote {
   id: string
@@ -74,6 +76,7 @@ export interface AplicacaoSaude {
 }
 
 export interface Mortalidade {
+  id?: string
   data: string
   loteId: string
   quantidade: number
@@ -100,6 +103,7 @@ export interface Fornecedor {
 }
 
 export interface Venda {
+  id?: string
   data: string
   cliente: string
   produto: string
@@ -110,6 +114,7 @@ export interface Venda {
 }
 
 export interface Compra {
+  id?: string
   data: string
   fornecedor: string
   tipo: string
@@ -133,6 +138,16 @@ export interface TipPreferences {
   dismissed: string[]
   irrelevant: string[]
   lastShown: Record<string, number>
+}
+
+export interface AuditLog {
+  id: string
+  timestamp: string
+  action: "create" | "update" | "delete"
+  entity: "lote" | "mortalidade" | "manejo" | "saude" | "aplicacao" | "visita"
+  entityId: string
+  details: string
+  user: string
 }
 
 // Funções auxiliares
@@ -258,20 +273,36 @@ export const DataService = {
   saveLote: (lote: Lote) => {
     const lotes = DataService.getLotes()
     const index = lotes.findIndex((l) => l.id === lote.id)
+    let action: "create" | "update" = "create"
 
     if (index >= 0) {
       lotes[index] = lote
+      action = "update"
     } else {
       lotes.push(lote)
     }
 
     setItem("lotes", lotes)
+    syncService.enqueue(action, "lotes", lote, lote.id)
     return lote
   },
   // Função implementada para uso futuro
   deleteLote: (id: string) => {
     const lotes = DataService.getLotes().filter((l) => l.id !== id)
     setItem("lotes", lotes)
+    syncService.enqueue("delete", "lotes", {}, id)
+  },
+
+  // Visitas Veterinárias
+  getVisitas: (): VisitaVeterinaria[] => getItem<VisitaVeterinaria[]>("visitasVeterinarias", []),
+  saveVisita: (visita: VisitaVeterinaria) => {
+    const visitas = DataService.getVisitas()
+    if (!visita.id) visita.id = crypto.randomUUID()
+    
+    visitas.push(visita)
+    setItem("visitasVeterinarias", visitas)
+    syncService.enqueue("create", "visitas_veterinarias", visita, visita.id)
+    return visita
   },
 
   // Manejo
@@ -292,6 +323,17 @@ export const DataService = {
     DataService.saveEstoque(estoque)
 
     setItem("manejoDia", manejoDia)
+
+    // Prepare for sync
+    const flatManejo = {
+        data,
+        periodo,
+        ...manejo
+    }
+    // Use composite key logic in SyncService or just pass a deterministic ID if possible. 
+    // We will use "upsert" with the data.
+    syncService.enqueue("upsert", "manejo_diario", flatManejo, `${data}_${periodo}_${manejo.loteId}`)
+
     return manejoDia
   },
 
@@ -305,6 +347,7 @@ export const DataService = {
     }),
   saveEstoque: (estoque: Estoque) => {
     setItem("estoque", estoque)
+    syncService.enqueue("upsert", "estoque", estoque, "singleton")
     return estoque
   },
 
@@ -312,8 +355,11 @@ export const DataService = {
   getAplicacoesSaude: (): AplicacaoSaude[] => getItem<AplicacaoSaude[]>("aplicacoesSaude", []),
   saveAplicacaoSaude: (aplicacao: AplicacaoSaude) => {
     const aplicacoes = DataService.getAplicacoesSaude()
+    if (!aplicacao.id) aplicacao.id = crypto.randomUUID()
+    
     aplicacoes.push(aplicacao)
     setItem("aplicacoesSaude", aplicacoes)
+    syncService.enqueue("create", "aplicacoes_saude", aplicacao, aplicacao.id)
     return aplicacao
   },
 
@@ -321,6 +367,7 @@ export const DataService = {
   getMortalidade: (): Mortalidade[] => getItem<Mortalidade[]>("mortalidade", []),
   saveMortalidade: (mortalidade: Mortalidade) => {
     const registros = DataService.getMortalidade()
+    if (!mortalidade.id) mortalidade.id = crypto.randomUUID()
 
     // Atualizar estoque de aves
     const estoque = DataService.getEstoque()
@@ -329,6 +376,7 @@ export const DataService = {
 
     registros.push(mortalidade)
     setItem("mortalidade", registros)
+    syncService.enqueue("create", "mortalidade", mortalidade, mortalidade.id)
     return mortalidade
   },
 
@@ -351,7 +399,7 @@ export const DataService = {
     }
 
     setItem("clientes", clientes)
-    void upsertClienteSupabase(cliente)
+    syncService.enqueue("upsert", "clientes", cliente, cliente.id)
     return cliente
   },
 
@@ -374,6 +422,7 @@ export const DataService = {
     }
 
     setItem("fornecedores", fornecedores)
+    syncService.enqueue("upsert", "fornecedores", fornecedor, fornecedor.id)
     return fornecedor
   },
 
@@ -407,6 +456,7 @@ export const DataService = {
   getVendas: (): Venda[] => getItem<Venda[]>("vendas", []),
   saveVenda: (venda: Venda) => {
     const vendas = DataService.getVendas()
+    if (!venda.id) venda.id = crypto.randomUUID()
 
     // Atualizar estoque
     const estoque = DataService.getEstoque()
@@ -420,6 +470,7 @@ export const DataService = {
 
     vendas.push(venda)
     setItem("vendas", vendas)
+    syncService.enqueue("create", "vendas", venda, venda.id)
     return venda
   },
 
@@ -427,8 +478,11 @@ export const DataService = {
   getCompras: (): Compra[] => getItem<Compra[]>("compras", []),
   saveCompra: (compra: Compra) => {
     const compras = DataService.getCompras()
+    if (!compra.id) compra.id = crypto.randomUUID()
+
     compras.push(compra)
     setItem("compras", compras)
+    syncService.enqueue("create", "compras", compra, compra.id)
     return compra
   },
 
@@ -498,6 +552,15 @@ export const DataService = {
       prefs.dismissed.push(id)
     }
     DataService.saveTipPreferences(prefs)
+  },
+
+  // Audit Logs
+  getAuditLogs: (): AuditLog[] => getItem<AuditLog[]>("auditLogs", []),
+  saveAuditLog: (log: AuditLog) => {
+    const logs = DataService.getAuditLogs()
+    logs.push(log)
+    setItem("auditLogs", logs)
+    return log
   },
   markTipIrrelevant: (id: string) => {
     const prefs = DataService.getTipPreferences()

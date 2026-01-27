@@ -38,7 +38,7 @@ export async function POST(req: Request) {
        console.warn(`[AUTH-REGISTER-${requestId}] Using MOCK register`)
        return NextResponse.json({
          user: {
-           id: "mock-user-id",
+           id: "123e4567-e89b-12d3-a456-426614174000",
            email: email,
            user_metadata: userData || { nome: "Usuário Teste" }
          },
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
            access_token: "mock-access-token",
            refresh_token: "mock-refresh-token",
            user: {
-             id: "mock-user-id",
+             id: "123e4567-e89b-12d3-a456-426614174000",
              email: email,
              user_metadata: userData || { nome: "Usuário Teste" }
            }

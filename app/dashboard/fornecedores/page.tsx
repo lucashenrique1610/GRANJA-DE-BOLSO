@@ -72,7 +72,7 @@ export default function FornecedoresPage() {
   const cadastrarFornecedor = () => {
     const { nome, cnpj, telefone, endereco, produtos } = formData
 
-    if (!nome || !cnpj || !telefone || !endereco) {
+    if (!nome || !telefone || !endereco) {
       toast({
         title: "Erro",
         description: "Preencha todos os campos obrigatórios!",
@@ -81,7 +81,7 @@ export default function FornecedoresPage() {
       return
     }
 
-    if (fornecedores.some((f) => f.cpfCnpj === cnpj)) {
+    if (cnpj && fornecedores.some((f) => f.cpfCnpj === cnpj)) {
       toast({
         title: "Erro",
         description: "CNPJ já cadastrado!",

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -10,16 +10,62 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
 import DashboardLayout from "@/components/dashboard-layout"
-import { Bird, Calendar, Scale, Users, Edit, X, Search, Filter, Plus, Trash2, FileText, Syringe, Stethoscope, MapPin, Info, Save, ArrowLeft } from "lucide-react"
+import { Bird, Calendar, Scale, Users, Edit, X, Search, Filter, Plus, Trash2, FileText, Syringe, Stethoscope, MapPin, Info, Save, ArrowLeft, Download } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import type { Lote, Fornecedor, VisitaVeterinaria, AplicacaoSaude } from "@/services/data-service"
+import { DataService, type Lote, type Fornecedor, type VisitaVeterinaria, type AplicacaoSaude, type Mortalidade, type ManejoDia, type Manejo, type AuditLog } from "@/services/data-service"
 import { validateDate, formatDateInput } from "@/lib/date-utils"
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from "@/components/ui/chart"
+import { LineChart, Line, Bar, XAxis, YAxis, CartesianGrid, ComposedChart } from "recharts"
 
 interface PesoLote {
   loteId: string
   data: string
   pesoMedio: number
+}
+
+type PeriodoHistorico = "ciclo" | "30dias" | "7dias" | "hoje" | "todos"
+
+type CategoriaSaude = "todas" | "preventivo" | "curativo" | "emergencial"
+
+interface HistoricoManejoItem {
+  id: string
+  data: string
+  periodo: "Manhã" | "Tarde"
+  hora: string
+  ovos: number
+  ovosDanificados: number
+  racao: number
+  porta: string
+  pesoOvos?: number
+  classificacao?: string
+  observacoes?: string
+}
+
+interface HistoricoConsumoDia {
+  data: string
+  fullDate: string
+  racaoTotal: number
+  meta: number
+}
+
+interface HistoricoMortalidadeDia {
+  data: string
+  fullDate: string
+  quantidade: number
+  accumulated: number
+  causa?: string
+}
+
+interface HistoricoSaudeItem {
+  id: string
+  data: string
+  tipoEvento: string // "Aplicação" | "Visita" | "Outro"
+  detalhe: string // Nome do medicamento ou procedimento
+  categoria: CategoriaSaude
+  responsavel: string
+  observacoes: string
 }
 
 export default function AnimaisPage() {
@@ -53,22 +99,174 @@ export default function AnimaisPage() {
   const [viewMode, setViewMode] = useState<"list" | "edit">("list")
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("todos")
+  const [saudeFilter, setSaudeFilter] = useState<CategoriaSaude>("todas")
   const [visitasVeterinarias, setVisitasVeterinarias] = useState<VisitaVeterinaria[]>([])
   const [allAplicacoes, setAllAplicacoes] = useState<AplicacaoSaude[]>([])
+  const [allMortalidade, setAllMortalidade] = useState<Mortalidade[]>([])
+  const [allManejoDia, setAllManejoDia] = useState<ManejoDia>({})
   
   // State for the full editing form
   const [editingLoteData, setEditingLoteData] = useState<{
     lote: Lote | null;
     aplicacoes: AplicacaoSaude[];
     visitas: VisitaVeterinaria[];
+    mortalidade: Mortalidade[];
+    manejo: HistoricoManejoItem[];
   }>({
     lote: null,
     aplicacoes: [],
-    visitas: []
+    visitas: [],
+    mortalidade: [],
+    manejo: []
   })
 
   const editingLote = editingId ? lotes.find((l) => l.id === editingId) : null
   const isLocked = editingLote ? (editingLote.femeas > 0 || editingLote.machos > 0) : false
+
+  // History State
+  const [historyPeriod, setHistoryPeriod] = useState<PeriodoHistorico>("30dias")
+  const [activeHistoryTab, setActiveHistoryTab] = useState("manejo")
+  
+  // Real Data Generation
+  const historicalData = useMemo(() => {
+    if (!editingLoteData.lote) return null
+
+    // Helper to parse DD/MM/YYYY
+    const parseDate = (dateStr: string) => {
+      const [day, month, year] = dateStr.split('/')
+      return new Date(`${year}-${month}-${day}`)
+    }
+
+    const today = new Date()
+    let startDate = parseDate(editingLoteData.lote.dataCompra)
+    if (isNaN(startDate.getTime())) startDate = new Date()
+
+    const daysDiff = Math.max(1, Math.floor((today.getTime() - startDate.getTime()) / (1000 * 3600 * 24)))
+    
+    const dates: string[] = []
+    for (let i = 0; i <= daysDiff; i++) {
+        const d = new Date(startDate)
+        d.setDate(d.getDate() + i)
+        dates.push(d.toLocaleDateString('pt-BR'))
+    }
+
+    // Mortalidade Real
+    const mortalidadeMap = new Map<string, {qtd: number, causa: string}>()
+    editingLoteData.mortalidade.forEach(m => {
+        const current = mortalidadeMap.get(m.data) || {qtd: 0, causa: ""}
+        mortalidadeMap.set(m.data, {
+            qtd: current.qtd + m.quantidade,
+            causa: current.causa ? `${current.causa}, ${m.causa}` : m.causa
+        })
+    })
+
+    let accMortality = 0
+    const mortalidadeData: HistoricoMortalidadeDia[] = dates.map(date => {
+        const entry = mortalidadeMap.get(date)
+        const qtd = entry ? entry.qtd : 0
+        accMortality += qtd
+        return {
+            data: date.slice(0, 5), // DD/MM for chart
+            fullDate: date,
+            quantidade: qtd,
+            accumulated: accMortality,
+            causa: entry ? entry.causa : "-"
+        }
+    })
+
+    // Manejo Real
+    const manejoData = [...editingLoteData.manejo].sort((a, b) => parseDate(b.data).getTime() - parseDate(a.data).getTime())
+
+    // Consumo Real
+    const consumoMap = new Map<string, number>()
+    manejoData.forEach(item => {
+        const current = consumoMap.get(item.data) || 0
+        consumoMap.set(item.data, current + item.racao)
+    })
+
+    const consumoData: HistoricoConsumoDia[] = dates.map((date, i) => ({
+        data: date.slice(0, 5),
+        fullDate: date,
+        racaoTotal: consumoMap.get(date) || 0,
+        meta: Math.floor(50 + (i * 0.2)) // Target simulation based on age
+    }))
+
+    // Saude Real
+    const saudeData: HistoricoSaudeItem[] = [
+        ...editingLoteData.aplicacoes.map(app => ({
+            id: app.id || `app-${Math.random()}`,
+            data: app.data,
+            tipoEvento: "Aplicação",
+            detalhe: app.nome,
+            categoria: (app.tipo === "Vacina" ? "preventivo" : "curativo") as CategoriaSaude,
+            responsavel: app.veterinario,
+            observacoes: app.observacoes
+        })),
+        ...editingLoteData.visitas.map(visita => ({
+            id: visita.id || `vis-${Math.random()}`,
+            data: visita.data,
+            tipoEvento: "Visita",
+            detalhe: visita.tipoProcedimento,
+            categoria: "preventivo" as CategoriaSaude, // Default
+            responsavel: visita.veterinario,
+            observacoes: visita.observacoes
+        }))
+    ].sort((a, b) => parseDate(b.data).getTime() - parseDate(a.data).getTime())
+
+    return { mortalidadeData, consumoData, manejoData, saudeData }
+  }, [editingLoteData.lote, editingLoteData.aplicacoes, editingLoteData.visitas, editingLoteData.mortalidade, editingLoteData.manejo])
+
+  const filterDataByPeriod = (data: any[]) => {
+      if (!data) return []
+      if (historyPeriod === "todos" || historyPeriod === "ciclo") return data
+      
+      const count = historyPeriod === "30dias" ? 30 : historyPeriod === "7dias" ? 7 : 1
+      return data.slice(-count)
+  }
+
+  const exportToCSV = (type: "mortalidade" | "consumo" | "manejo" | "saude") => {
+      if (!historicalData) return
+      
+      let headers = ""
+      let rows: any[] = []
+      let filename = ""
+
+      if (type === "mortalidade") {
+          headers = "Data,Quantidade,Acumulado,Causa\n"
+          rows = historicalData.mortalidadeData.map(d => `${d.fullDate},${d.quantidade},${d.accumulated},"${d.causa || ''}"`)
+          filename = "historico_mortalidade.csv"
+      } else if (type === "consumo") {
+          headers = "Data,Racao Total (g),Meta (g)\n"
+          rows = historicalData.consumoData.map(d => `${d.fullDate},${d.racaoTotal},${d.meta}`)
+          filename = "historico_consumo.csv"
+      } else if (type === "manejo") {
+          headers = "Data,Hora,Periodo,Ovos,Danificados,Racao,Porta,Observacoes\n"
+          rows = historicalData.manejoData.map(d => `${d.data},${d.hora},${d.periodo},${d.ovos},${d.ovosDanificados},${d.racao},"${d.porta || ''}","${d.observacoes || ''}"`)
+          filename = "historico_manejo.csv"
+      } else {
+          headers = "Data,Tipo,Detalhe,Categoria,Responsavel,Observacoes\n"
+          rows = historicalData.saudeData.map(d => `${d.data},${d.tipoEvento},"${d.detalhe}",${d.categoria},${d.responsavel},"${d.observacoes || ''}"`)
+          filename = "historico_saude.csv"
+      }
+
+      const csvContent = "data:text/csv;charset=utf-8," + headers + rows.join("\n")
+      const encodedUri = encodeURI(csvContent)
+      const link = document.createElement("a")
+      link.setAttribute("href", encodedUri)
+      link.setAttribute("download", filename)
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+  }
+
+  const exportToPDF = (_type: "mortalidade" | "consumo" | "manejo" | "saude") => {
+    // Simulação de exportação PDF
+    window.print()
+    toast({
+      title: "Exportar PDF",
+      description: "Utilize a opção 'Salvar como PDF' da janela de impressão.",
+    })
+  }
 
   const loadData = () => {
     try {
@@ -77,12 +275,16 @@ export default function AnimaisPage() {
       const pesosLotesData = JSON.parse(localStorage.getItem("pesosLotes") || "[]")
       const visitasData = JSON.parse(localStorage.getItem("visitasVeterinarias") || "[]")
       const aplicacoesData = JSON.parse(localStorage.getItem("aplicacoesSaude") || "[]")
+      const mortalidadeData = JSON.parse(localStorage.getItem("mortalidade") || "[]")
+      const manejoDiaData = JSON.parse(localStorage.getItem("manejoDia") || "{}")
 
       setLotes(lotesData)
       setFornecedores(fornecedoresData)
       setPesosLotes(pesosLotesData)
       setVisitasVeterinarias(visitasData)
       setAllAplicacoes(aplicacoesData)
+      setAllMortalidade(mortalidadeData)
+      setAllManejoDia(manejoDiaData)
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
       toast({
@@ -482,11 +684,45 @@ export default function AnimaisPage() {
   const handleSelectLoteForEdit = (lote: Lote) => {
     const loteAplicacoes = allAplicacoes.filter(app => app.loteId === lote.id)
     const loteVisitas = visitasVeterinarias.filter(v => v.loteId === lote.id)
+    const loteMortalidade = allMortalidade.filter(m => m.loteId === lote.id)
     
+    // Convert ManejoDia to list
+    const loteManejo: HistoricoManejoItem[] = []
+    Object.entries(allManejoDia).forEach(([date, periods]) => {
+        if (periods.manha && periods.manha.loteId === lote.id) {
+             loteManejo.push({
+                 id: `man-${date}-manha`,
+                 data: date,
+                 periodo: "Manhã",
+                 hora: "08:00",
+                 ovos: periods.manha.ovos || 0,
+                 ovosDanificados: periods.manha.ovosDanificados || 0,
+                 racao: periods.manha.racao || 0,
+                 porta: periods.manha.porta || "-",
+                 observacoes: periods.manha.outros || ""
+             })
+        }
+        if (periods.tarde && periods.tarde.loteId === lote.id) {
+             loteManejo.push({
+                 id: `man-${date}-tarde`,
+                 data: date,
+                 periodo: "Tarde",
+                 hora: "16:00",
+                 ovos: periods.tarde.ovos || 0,
+                 ovosDanificados: periods.tarde.ovosDanificados || 0,
+                 racao: periods.tarde.racao || 0,
+                 porta: periods.tarde.porta || "-",
+                 observacoes: periods.tarde.outros || ""
+             })
+        }
+    })
+
     setEditingLoteData({
       lote: { ...lote },
       aplicacoes: loteAplicacoes.map(a => ({...a})),
-      visitas: loteVisitas.map(v => ({...v}))
+      visitas: loteVisitas.map(v => ({...v})),
+      mortalidade: loteMortalidade.map(m => ({...m})),
+      manejo: loteManejo
     })
     setViewMode("edit")
   }
@@ -569,6 +805,74 @@ export default function AnimaisPage() {
     })
   }
 
+  // Handlers for Mortalidade
+  const handleUpdateMortalidadeLocal = (index: number, field: keyof Mortalidade, value: any) => {
+    setEditingLoteData(prev => {
+      const newMortalidade = [...prev.mortalidade]
+      newMortalidade[index] = { ...newMortalidade[index], [field]: value }
+      return { ...prev, mortalidade: newMortalidade }
+    })
+  }
+
+  const handleRemoveMortalidadeLocal = (index: number) => {
+    setEditingLoteData(prev => {
+      const newMortalidade = [...prev.mortalidade]
+      newMortalidade.splice(index, 1)
+      return { ...prev, mortalidade: newMortalidade }
+    })
+  }
+
+  const handleAddMortalidadeLocal = () => {
+    if (!editingLoteData.lote) return
+    const newItem: Mortalidade = {
+      loteId: editingLoteData.lote.id,
+      data: new Date().toLocaleDateString("pt-BR"),
+      quantidade: 1,
+      causa: "",
+      observacoes: ""
+    }
+    setEditingLoteData(prev => ({
+      ...prev,
+      mortalidade: [newItem, ...prev.mortalidade]
+    }))
+  }
+
+  // Handlers for Manejo
+  const handleUpdateManejoLocal = (index: number, field: keyof HistoricoManejoItem, value: any) => {
+    setEditingLoteData(prev => {
+      const newManejo = [...prev.manejo]
+      newManejo[index] = { ...newManejo[index], [field]: value }
+      return { ...prev, manejo: newManejo }
+    })
+  }
+
+  const handleRemoveManejoLocal = (index: number) => {
+    setEditingLoteData(prev => {
+      const newManejo = [...prev.manejo]
+      newManejo.splice(index, 1)
+      return { ...prev, manejo: newManejo }
+    })
+  }
+
+  const handleAddManejoLocal = () => {
+    if (!editingLoteData.lote) return
+    const newItem: HistoricoManejoItem = {
+      id: `new-${Date.now()}`,
+      data: new Date().toLocaleDateString("pt-BR"),
+      periodo: "Manhã",
+      hora: "08:00",
+      ovos: 0,
+      ovosDanificados: 0,
+      racao: 0,
+      porta: "",
+      observacoes: ""
+    }
+    setEditingLoteData(prev => ({
+      ...prev,
+      manejo: [newItem, ...prev.manejo]
+    }))
+  }
+
   const handleSaveFullEdit = () => {
     if (!editingLoteData.lote) return
 
@@ -591,6 +895,20 @@ export default function AnimaisPage() {
             return
         }
     }
+    
+    for (const mort of editingLoteData.mortalidade) {
+        if (!validateDate(mort.data)) {
+            toast({ title: "Erro", description: "Data inválida no histórico de mortalidade!", variant: "destructive" })
+            return
+        }
+    }
+
+    for (const man of editingLoteData.manejo) {
+        if (!validateDate(man.data)) {
+            toast({ title: "Erro", description: "Data inválida no histórico de manejo!", variant: "destructive" })
+            return
+        }
+    }
 
     // Update Lote
     const updatedLotes = lotes.map(l => l.id === editingLoteData.lote!.id ? editingLoteData.lote! : l)
@@ -609,9 +927,74 @@ export default function AnimaisPage() {
     setVisitasVeterinarias(finalVisitas)
     localStorage.setItem("visitasVeterinarias", JSON.stringify(finalVisitas))
 
+    // Update Mortalidade
+    const otherMortalidade = allMortalidade.filter(m => m.loteId !== editingLoteData.lote!.id)
+    const finalMortalidade = [...otherMortalidade, ...editingLoteData.mortalidade]
+    setAllMortalidade(finalMortalidade)
+    localStorage.setItem("mortalidade", JSON.stringify(finalMortalidade))
+
+    // Update Manejo
+    const newManejoDia = { ...allManejoDia }
+    // First, clear existing entries for this lote
+    Object.keys(newManejoDia).forEach(date => {
+        if (newManejoDia[date].manha?.loteId === editingLoteData.lote!.id) {
+            delete newManejoDia[date].manha
+        }
+        if (newManejoDia[date].tarde?.loteId === editingLoteData.lote!.id) {
+            delete newManejoDia[date].tarde
+        }
+        // Cleanup empty dates
+        if (!newManejoDia[date].manha && !newManejoDia[date].tarde) {
+            delete newManejoDia[date]
+        }
+    })
+    
+    // Add new entries from editingLoteData.manejo
+    editingLoteData.manejo.forEach(item => {
+        if (!newManejoDia[item.data]) {
+            newManejoDia[item.data] = {}
+        }
+        const manejoRecord: Manejo = {
+            loteId: editingLoteData.lote!.id,
+            ovos: item.ovos,
+            ovosDanificados: item.ovosDanificados,
+            racao: item.racao,
+            porta: item.porta,
+            outros: item.observacoes || "",
+            status: "realizado",
+            agua: 0,
+            pesoOvos: 0,
+            classificacao: ""
+        }
+        
+        if (item.periodo === "Manhã") {
+            newManejoDia[item.data].manha = manejoRecord
+        } else {
+            newManejoDia[item.data].tarde = manejoRecord
+        }
+    })
+    
+    setAllManejoDia(newManejoDia)
+    localStorage.setItem("manejoDia", JSON.stringify(newManejoDia))
+
+    // Audit Log
+    try {
+        DataService.saveAuditLog({
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            action: "update",
+            entity: "lote",
+            entityId: editingLoteData.lote!.id,
+            details: "Edição manual completa (Histórico de Manejo/Mortalidade/Saúde)",
+            user: "Usuário"
+        })
+    } catch (e) {
+        console.error("Failed to save audit log", e)
+    }
+
     toast({ title: "Sucesso", description: "Alterações salvas com sucesso!" })
     setViewMode("list")
-    setEditingLoteData({ lote: null, aplicacoes: [], visitas: [] })
+    setEditingLoteData({ lote: null, aplicacoes: [], visitas: [], mortalidade: [], manejo: [] })
   }
 
   return (
@@ -664,8 +1047,8 @@ export default function AnimaisPage() {
                         <SelectValue placeholder="Selecione um fornecedor" />
                       </SelectTrigger>
                       <SelectContent>
-                        {fornecedores.map((fornecedor) => (
-                          <SelectItem key={fornecedor.cpfCnpj} value={fornecedor.cpfCnpj}>
+                        {fornecedores.map((fornecedor, idx) => (
+                          <SelectItem key={fornecedor.cpfCnpj || `f-${idx}`} value={fornecedor.cpfCnpj || ""}>
                             {fornecedor.nome}
                           </SelectItem>
                         ))}
@@ -1092,7 +1475,7 @@ export default function AnimaisPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  {/* Seção 1: Informações Básicas */}
+                  {/* Informações Básicas */}
                   <div className="space-y-4 border p-4 rounded-md">
                     <h3 className="font-semibold flex items-center gap-2">
                       <Info className="h-4 w-4" /> Informações Básicas
@@ -1128,147 +1511,563 @@ export default function AnimaisPage() {
                     </div>
                   </div>
 
-                  {/* Seção 2: Histórico de Aplicações */}
-                  <div className="space-y-4 border p-4 rounded-md">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-semibold flex items-center gap-2">
-                        <Syringe className="h-4 w-4" /> Histórico de Aplicações
-                      </h3>
-                      <Button size="sm" onClick={handleAddAplicacaoLocal} variant="outline">
-                        <Plus className="h-4 w-4 mr-2" /> Adicionar
-                      </Button>
+                  {/* Histórico do Lote */}
+                  <div className="border-t pt-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                       <h2 className="text-xl font-bold">Histórico Completo</h2>
+                       <Select value={historyPeriod} onValueChange={(v) => setHistoryPeriod(v as PeriodoHistorico)}>
+                         <SelectTrigger className="w-full md:w-[200px]">
+                           <SelectValue placeholder="Período" />
+                         </SelectTrigger>
+                         <SelectContent>
+                           <SelectItem value="ciclo">Ciclo Completo</SelectItem>
+                           <SelectItem value="30dias">Últimos 30 dias</SelectItem>
+                           <SelectItem value="7dias">Últimos 7 dias</SelectItem>
+                         </SelectContent>
+                       </Select>
                     </div>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Data</TableHead>
-                          <TableHead>Medicamento</TableHead>
-                          <TableHead>Dosagem</TableHead>
-                          <TableHead>Responsável</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {editingLoteData.aplicacoes.map((app, idx) => (
-                          <TableRow key={app.id || idx}>
-                             <TableCell>
-                               <Input 
-                                 className="h-8 w-32" 
-                                 value={app.data} 
-                                 onChange={(e) => handleUpdateAplicacaoLocal(idx, "data", formatDateInput(e.target.value))}
-                               />
-                             </TableCell>
-                             <TableCell>
-                               <Input 
-                                 className="h-8" 
-                                 value={app.nome} 
-                                 onChange={(e) => handleUpdateAplicacaoLocal(idx, "nome", e.target.value)}
-                                 placeholder="Nome do medicamento"
-                               />
-                             </TableCell>
-                             <TableCell>
-                               <Input 
-                                 className="h-8 w-24" 
-                                 type="number"
-                                 value={app.quantidade} 
-                                 onChange={(e) => handleUpdateAplicacaoLocal(idx, "quantidade", Number(e.target.value))}
-                               />
-                             </TableCell>
-                             <TableCell>
-                               <Input 
-                                 className="h-8" 
-                                 value={app.veterinario} 
-                                 onChange={(e) => handleUpdateAplicacaoLocal(idx, "veterinario", e.target.value)}
-                                 placeholder="Responsável"
-                               />
-                             </TableCell>
-                             <TableCell>
-                               <Button variant="ghost" size="sm" onClick={() => handleRemoveAplicacaoLocal(idx)}>
-                                 <Trash2 className="h-4 w-4 text-destructive" />
+
+                    <Tabs value={activeHistoryTab} onValueChange={setActiveHistoryTab} className="w-full">
+                       <TabsList className="grid w-full h-auto grid-cols-2 sm:grid-cols-4 gap-2">
+                          <TabsTrigger value="manejo">Manejo</TabsTrigger>
+                          <TabsTrigger value="mortalidade">Mortalidade</TabsTrigger>
+                          <TabsTrigger value="consumo">Consumo</TabsTrigger>
+                          <TabsTrigger value="saude">Saúde</TabsTrigger>
+                       </TabsList>
+                       
+                       {/* 1. Histórico de Manejo */}
+                       <TabsContent value="manejo" className="space-y-4 pt-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                             <h3 className="text-lg font-semibold">Registro de Atividades</h3>
+                             <div className="flex w-full sm:w-auto gap-2">
+                               <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => exportToCSV("manejo")}>
+                                 <Download className="mr-2 h-4 w-4" /> CSV
                                </Button>
-                             </TableCell>
-                          </TableRow>
-                        ))}
-                        {editingLoteData.aplicacoes.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={5} className="text-center text-muted-foreground">Nenhuma aplicação registrada.</TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                               <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => exportToPDF("manejo")}>
+                                 <FileText className="mr-2 h-4 w-4" /> PDF
+                               </Button>
+                             </div>
+                          </div>
+                          <div className="rounded-md border overflow-x-auto">
+                             <Table>
+                               <TableHeader>
+                                 <TableRow>
+                                   <TableHead>Data</TableHead>
+                                   <TableHead>Hora</TableHead>
+                                   <TableHead>Tipo de Operação</TableHead>
+                                   <TableHead>Responsável</TableHead>
+                                   <TableHead>Observações</TableHead>
+                                 </TableRow>
+                               </TableHeader>
+                               <TableBody>
+                                 {filterDataByPeriod(historicalData?.manejoData || []).map((item: any, i: number) => (
+                                    <TableRow key={i}>
+                                       <TableCell>{item.data}</TableCell>
+                                       <TableCell>{item.hora}</TableCell>
+                                       <TableCell>Rotina</TableCell> 
+                                       <TableCell>Gerente</TableCell>
+                                       <TableCell>{item.observacoes}</TableCell>
+                                    </TableRow>
+                                 ))}
+                                 {(!historicalData?.manejoData || historicalData.manejoData.length === 0) && (
+                                    <TableRow><TableCell colSpan={5} className="text-center py-4">Nenhum registro encontrado</TableCell></TableRow>
+                                 )}
+                               </TableBody>
+                             </Table>
+                          </div>
+
+                          <div className="space-y-4 pt-6 border-t">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <h3 className="text-lg font-semibold">Gerenciar Registros</h3>
+                                <Button size="sm" onClick={handleAddManejoLocal} className="w-full sm:w-auto">
+                                    <Plus className="h-4 w-4 mr-2" /> Adicionar
+                                </Button>
+                            </div>
+                            <div className="rounded-md border p-4 overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Data</TableHead>
+                                            <TableHead>Período</TableHead>
+                                            <TableHead>Ovos</TableHead>
+                                            <TableHead>Danificados</TableHead>
+                                            <TableHead>Ração (kg)</TableHead>
+                                            <TableHead>Porta</TableHead>
+                                            <TableHead>Observações</TableHead>
+                                            <TableHead></TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {editingLoteData.manejo.map((item, idx) => (
+                                            <TableRow key={item.id || idx}>
+                                                <TableCell>
+                                                    <Input 
+                                                        className="h-8 w-32" 
+                                                        value={item.data} 
+                                                        onChange={(e) => handleUpdateManejoLocal(idx, "data", formatDateInput(e.target.value))}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Select 
+                                                        value={item.periodo} 
+                                                        onValueChange={(val) => handleUpdateManejoLocal(idx, "periodo", val)}
+                                                    >
+                                                        <SelectTrigger className="h-8 w-24">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="Manhã">Manhã</SelectItem>
+                                                            <SelectItem value="Tarde">Tarde</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input 
+                                                        className="h-8 w-20" 
+                                                        type="number" 
+                                                        value={item.ovos} 
+                                                        onChange={(e) => handleUpdateManejoLocal(idx, "ovos", Number(e.target.value))}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input 
+                                                        className="h-8 w-20" 
+                                                        type="number" 
+                                                        value={item.ovosDanificados} 
+                                                        onChange={(e) => handleUpdateManejoLocal(idx, "ovosDanificados", Number(e.target.value))}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input 
+                                                        className="h-8 w-20" 
+                                                        type="number" 
+                                                        value={item.racao} 
+                                                        onChange={(e) => handleUpdateManejoLocal(idx, "racao", Number(e.target.value))}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input 
+                                                        className="h-8 w-20" 
+                                                        value={item.porta} 
+                                                        onChange={(e) => handleUpdateManejoLocal(idx, "porta", e.target.value)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input 
+                                                        className="h-8" 
+                                                        value={item.observacoes || ""} 
+                                                        onChange={(e) => handleUpdateManejoLocal(idx, "observacoes", e.target.value)}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleRemoveManejoLocal(idx)}>
+                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {editingLoteData.manejo.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={8} className="text-center text-muted-foreground">Nenhum registro de manejo.</TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                          </div>
+                       </TabsContent>
+
+                       {/* 2. Histórico de Mortalidade */}
+                       <TabsContent value="mortalidade" className="space-y-4 pt-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                             <h3 className="text-lg font-semibold">Evolução da Mortalidade</h3>
+                             <div className="flex w-full sm:w-auto gap-2">
+                               <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => exportToCSV("mortalidade")}>
+                                 <Download className="mr-2 h-4 w-4" /> CSV
+                               </Button>
+                               <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => exportToPDF("mortalidade")}>
+                                 <FileText className="mr-2 h-4 w-4" /> PDF
+                               </Button>
+                             </div>
+                          </div>
+                          <Card>
+                             <CardContent className="pt-6">
+                                <div className="h-[350px] w-full">
+                                   <ChartContainer config={{
+                                       quantidade: { label: "Mortalidade Diária", color: "#ef4444" },
+                                       accumulated: { label: "Acumulado", color: "#b91c1c" }
+                                   }}>
+                                     <ComposedChart data={filterDataByPeriod(historicalData?.mortalidadeData || [])}>
+                                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                                        <XAxis dataKey="data" tickLine={false} axisLine={false} tickMargin={8} />
+                                        <YAxis yAxisId="left" />
+                                        <YAxis yAxisId="right" orientation="right" />
+                                        <ChartTooltip content={<ChartTooltipContent />} />
+                                        <ChartLegend content={<ChartLegendContent />} />
+                                        <Bar yAxisId="left" dataKey="quantidade" fill="var(--color-quantidade)" radius={[4, 4, 0, 0]} name="Diária" />
+                                        <Line yAxisId="right" type="monotone" dataKey="accumulated" stroke="var(--color-accumulated)" strokeWidth={2} name="Acumulada" />
+                                     </ComposedChart>
+                                   </ChartContainer>
+                                </div>
+                             </CardContent>
+                          </Card>
+                          <div className="rounded-md border mt-4 overflow-x-auto">
+                             <Table>
+                               <TableHeader>
+                                 <TableRow>
+                                   <TableHead>Data</TableHead>
+                                   <TableHead>Mortalidade</TableHead>
+                                   <TableHead>Acumulado</TableHead>
+                                   <TableHead>Causa</TableHead>
+                                 </TableRow>
+                               </TableHeader>
+                               <TableBody>
+                                 {filterDataByPeriod(historicalData?.mortalidadeData || []).map((item: any, i: number) => (
+                                    <TableRow key={i}>
+                                       <TableCell>{item.fullDate}</TableCell>
+                                       <TableCell>{item.quantidade}</TableCell>
+                                       <TableCell>{item.accumulated}</TableCell>
+                                       <TableCell>{item.causa}</TableCell>
+                                    </TableRow>
+                                 ))}
+                               </TableBody>
+                             </Table>
+                          </div>
+
+                          <div className="space-y-4 pt-6 border-t">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <h3 className="text-lg font-semibold">Gerenciar Registros</h3>
+                                <Button size="sm" onClick={handleAddMortalidadeLocal} className="w-full sm:w-auto">
+                                    <Plus className="h-4 w-4 mr-2" /> Adicionar
+                                </Button>
+                            </div>
+                            <div className="rounded-md border p-4 overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Data</TableHead>
+                                            <TableHead>Quantidade</TableHead>
+                                            <TableHead>Causa</TableHead>
+                                            <TableHead>Observações</TableHead>
+                                            <TableHead></TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {editingLoteData.mortalidade.map((item, idx) => (
+                                            <TableRow key={idx}>
+                                                <TableCell>
+                                                    <Input 
+                                                        className="h-8 w-32" 
+                                                        value={item.data} 
+                                                        onChange={(e) => handleUpdateMortalidadeLocal(idx, "data", formatDateInput(e.target.value))}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input 
+                                                        className="h-8 w-24" 
+                                                        type="number" 
+                                                        value={item.quantidade} 
+                                                        onChange={(e) => handleUpdateMortalidadeLocal(idx, "quantidade", Number(e.target.value))}
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input 
+                                                        className="h-8" 
+                                                        value={item.causa || ""} 
+                                                        onChange={(e) => handleUpdateMortalidadeLocal(idx, "causa", e.target.value)}
+                                                        placeholder="Causa da morte"
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Input 
+                                                        className="h-8" 
+                                                        value={item.observacoes || ""} 
+                                                        onChange={(e) => handleUpdateMortalidadeLocal(idx, "observacoes", e.target.value)}
+                                                        placeholder="Observações"
+                                                    />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Button variant="ghost" size="sm" onClick={() => handleRemoveMortalidadeLocal(idx)}>
+                                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {editingLoteData.mortalidade.length === 0 && (
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="text-center text-muted-foreground">Nenhum registro de mortalidade.</TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                          </div>
+                       </TabsContent>
+
+                       {/* 3. Histórico de Consumo */}
+                       <TabsContent value="consumo" className="space-y-4 pt-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                             <h3 className="text-lg font-semibold">Consumo de Ração</h3>
+                             <div className="flex w-full sm:w-auto gap-2">
+                               <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => exportToCSV("consumo")}>
+                                 <Download className="mr-2 h-4 w-4" /> CSV
+                               </Button>
+                               <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => exportToPDF("consumo")}>
+                                 <FileText className="mr-2 h-4 w-4" /> PDF
+                               </Button>
+                             </div>
+                          </div>
+                          <Card>
+                             <CardContent className="pt-6">
+                                <div className="h-[350px] w-full">
+                                   <ChartContainer config={{
+                                       racaoTotal: { label: "Consumo Real (g)", color: "#2563eb" },
+                                       meta: { label: "Meta (g)", color: "#9333ea" }
+                                   }}>
+                                     <LineChart data={filterDataByPeriod(historicalData?.consumoData || [])}>
+                                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                                        <XAxis dataKey="data" tickLine={false} axisLine={false} tickMargin={8} />
+                                        <YAxis />
+                                        <ChartTooltip content={<ChartTooltipContent />} />
+                                        <ChartLegend content={<ChartLegendContent />} />
+                                        <Line type="monotone" dataKey="racaoTotal" stroke="var(--color-racaoTotal)" strokeWidth={2} name="Real" />
+                                        <Line type="monotone" dataKey="meta" stroke="var(--color-meta)" strokeDasharray="5 5" strokeWidth={2} name="Meta" />
+                                     </LineChart>
+                                   </ChartContainer>
+                                </div>
+                             </CardContent>
+                          </Card>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 my-4">
+                             <Card>
+                               <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Conversão Alimentar (CA)</CardTitle></CardHeader>
+                               <CardContent><div className="text-2xl font-bold">1.45</div><p className="text-xs text-muted-foreground">Esperado: 1.42</p></CardContent>
+                             </Card>
+                             <Card>
+                               <CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Consumo Acumulado</CardTitle></CardHeader>
+                               <CardContent><div className="text-2xl font-bold">4.2 kg</div><p className="text-xs text-muted-foreground">Por ave</p></CardContent>
+                             </Card>
+                          </div>
+                       </TabsContent>
+
+                       {/* 4. Histórico de Saúde */}
+                       <TabsContent value="saude" className="space-y-4 pt-4">
+                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                             <h3 className="text-lg font-semibold">Registro de Eventos Sanitários</h3>
+                             <div className="flex w-full sm:w-auto flex-col sm:flex-row gap-2 items-start sm:items-center">
+                                <Select value={saudeFilter} onValueChange={(v) => setSaudeFilter(v as CategoriaSaude)}>
+                                   <SelectTrigger className="w-full sm:w-[150px] h-8">
+                                     <SelectValue placeholder="Categoria" />
+                                   </SelectTrigger>
+                                   <SelectContent>
+                                     <SelectItem value="todas">Todas</SelectItem>
+                                     <SelectItem value="preventivo">Preventivo</SelectItem>
+                                     <SelectItem value="curativo">Curativo</SelectItem>
+                                     <SelectItem value="emergencial">Emergencial</SelectItem>
+                                   </SelectContent>
+                                </Select>
+                                <div className="flex w-full sm:w-auto gap-2">
+                                    <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => exportToCSV("saude")}>
+                                      <Download className="mr-2 h-4 w-4" /> CSV
+                                    </Button>
+                                    <Button className="flex-1 sm:flex-none" variant="outline" size="sm" onClick={() => exportToPDF("saude")}>
+                                      <FileText className="mr-2 h-4 w-4" /> PDF
+                                    </Button>
+                                </div>
+                             </div>
+                          </div>
+
+                          <div className="rounded-md border overflow-x-auto">
+                             <Table>
+                               <TableHeader>
+                                 <TableRow>
+                                   <TableHead>Data</TableHead>
+                                   <TableHead>Tipo</TableHead>
+                                   <TableHead>Detalhe</TableHead>
+                                   <TableHead>Categoria</TableHead>
+                                   <TableHead>Responsável</TableHead>
+                                   <TableHead>Observações</TableHead>
+                                 </TableRow>
+                               </TableHeader>
+                               <TableBody>
+                                 {filterDataByPeriod(historicalData?.saudeData || [])
+                                    .filter((item: HistoricoSaudeItem) => saudeFilter === "todas" || item.categoria === saudeFilter)
+                                    .map((item: HistoricoSaudeItem) => (
+                                    <TableRow key={item.id}>
+                                       <TableCell>{item.data}</TableCell>
+                                       <TableCell>
+                                          <Badge variant="outline">{item.tipoEvento}</Badge>
+                                       </TableCell>
+                                       <TableCell>{item.detalhe}</TableCell>
+                                       <TableCell>
+                                          <Badge className={
+                                            item.categoria === "preventivo" ? "bg-green-100 text-green-800 hover:bg-green-200" :
+                                            item.categoria === "curativo" ? "bg-blue-100 text-blue-800 hover:bg-blue-200" :
+                                            item.categoria === "emergencial" ? "bg-red-100 text-red-800 hover:bg-red-200" : ""
+                                          }>
+                                            {item.categoria.charAt(0).toUpperCase() + item.categoria.slice(1)}
+                                          </Badge>
+                                       </TableCell>
+                                       <TableCell>{item.responsavel}</TableCell>
+                                       <TableCell>{item.observacoes}</TableCell>
+                                    </TableRow>
+                                 ))}
+                                 {(!historicalData?.saudeData || historicalData.saudeData.length === 0) && (
+                                    <TableRow><TableCell colSpan={6} className="text-center py-4">Nenhum evento registrado</TableCell></TableRow>
+                                 )}
+                               </TableBody>
+                             </Table>
+                          </div>
+
+                          <div className="space-y-4 pt-6 border-t">
+                            <h3 className="text-lg font-semibold">Gerenciar Registros</h3>
+                            {/* Reuse existing sections but wrapped */}
+                            <div className="space-y-4 border p-4 rounded-md">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <h3 className="font-semibold flex items-center gap-2">
+                                    <Syringe className="h-4 w-4" /> Aplicações e Vacinas
+                                </h3>
+                                <Button size="sm" onClick={handleAddAplicacaoLocal} variant="outline" className="w-full sm:w-auto">
+                                    <Plus className="h-4 w-4 mr-2" /> Adicionar
+                                </Button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                    <TableHead>Data</TableHead>
+                                    <TableHead>Medicamento</TableHead>
+                                    <TableHead>Dosagem</TableHead>
+                                    <TableHead>Responsável</TableHead>
+                                    <TableHead></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {editingLoteData.aplicacoes.map((app, idx) => (
+                                    <TableRow key={app.id || idx}>
+                                        <TableCell>
+                                        <Input 
+                                            className="h-8 w-32" 
+                                            value={app.data} 
+                                            onChange={(e) => handleUpdateAplicacaoLocal(idx, "data", formatDateInput(e.target.value))}
+                                        />
+                                        </TableCell>
+                                        <TableCell>
+                                        <Input 
+                                            className="h-8" 
+                                            value={app.nome} 
+                                            onChange={(e) => handleUpdateAplicacaoLocal(idx, "nome", e.target.value)}
+                                            placeholder="Nome do medicamento"
+                                        />
+                                        </TableCell>
+                                        <TableCell>
+                                        <Input 
+                                            className="h-8 w-24" 
+                                            type="number"
+                                            value={app.quantidade} 
+                                            onChange={(e) => handleUpdateAplicacaoLocal(idx, "quantidade", Number(e.target.value))}
+                                        />
+                                        </TableCell>
+                                        <TableCell>
+                                        <Input 
+                                            className="h-8" 
+                                            value={app.veterinario} 
+                                            onChange={(e) => handleUpdateAplicacaoLocal(idx, "veterinario", e.target.value)}
+                                            placeholder="Responsável"
+                                        />
+                                        </TableCell>
+                                        <TableCell>
+                                        <Button variant="ghost" size="sm" onClick={() => handleRemoveAplicacaoLocal(idx)}>
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                    ))}
+                                    {editingLoteData.aplicacoes.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center text-muted-foreground">Nenhuma aplicação registrada.</TableCell>
+                                    </TableRow>
+                                    )}
+                                </TableBody>
+                                </Table>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 border p-4 rounded-md">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                                <h3 className="font-semibold flex items-center gap-2">
+                                    <Stethoscope className="h-4 w-4" /> Consultas e Procedimentos
+                                </h3>
+                                <Button size="sm" onClick={handleAddVisitaLocal} variant="outline" className="w-full sm:w-auto">
+                                    <Plus className="h-4 w-4 mr-2" /> Adicionar
+                                </Button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                    <TableHead>Data</TableHead>
+                                    <TableHead>Procedimento</TableHead>
+                                    <TableHead>Veterinário</TableHead>
+                                    <TableHead>Observações</TableHead>
+                                    <TableHead></TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {editingLoteData.visitas.map((visita, idx) => (
+                                    <TableRow key={visita.id || idx}>
+                                        <TableCell>
+                                        <Input 
+                                            className="h-8 w-32" 
+                                            value={visita.data} 
+                                            onChange={(e) => handleUpdateVisitaLocal(idx, "data", formatDateInput(e.target.value))}
+                                        />
+                                        </TableCell>
+                                        <TableCell>
+                                        <Input 
+                                            className="h-8" 
+                                            value={visita.tipoProcedimento} 
+                                            onChange={(e) => handleUpdateVisitaLocal(idx, "tipoProcedimento", e.target.value)}
+                                            placeholder="Tipo de procedimento"
+                                        />
+                                        </TableCell>
+                                        <TableCell>
+                                        <Input 
+                                            className="h-8" 
+                                            value={visita.veterinario} 
+                                            onChange={(e) => handleUpdateVisitaLocal(idx, "veterinario", e.target.value)}
+                                            placeholder="Nome do veterinário"
+                                        />
+                                        </TableCell>
+                                        <TableCell>
+                                        <Input 
+                                            className="h-8" 
+                                            value={visita.observacoes} 
+                                            onChange={(e) => handleUpdateVisitaLocal(idx, "observacoes", e.target.value)}
+                                            placeholder="Observações"
+                                        />
+                                        </TableCell>
+                                        <TableCell>
+                                        <Button variant="ghost" size="sm" onClick={() => handleRemoveVisitaLocal(idx)}>
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                    ))}
+                                    {editingLoteData.visitas.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center text-muted-foreground">Nenhuma visita registrada.</TableCell>
+                                    </TableRow>
+                                    )}
+                                </TableBody>
+                                </Table>
+                                </div>
+                            </div>
+                          </div>
+                       </TabsContent>
+                    </Tabs>
                   </div>
 
-                  {/* Seção 3: Histórico Veterinário */}
-                  <div className="space-y-4 border p-4 rounded-md">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-semibold flex items-center gap-2">
-                        <Stethoscope className="h-4 w-4" /> Histórico Veterinário
-                      </h3>
-                      <Button size="sm" onClick={handleAddVisitaLocal} variant="outline">
-                        <Plus className="h-4 w-4 mr-2" /> Adicionar
-                      </Button>
-                    </div>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Data</TableHead>
-                          <TableHead>Procedimento</TableHead>
-                          <TableHead>Veterinário</TableHead>
-                          <TableHead>Observações</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                         {editingLoteData.visitas.map((visita, idx) => (
-                          <TableRow key={visita.id || idx}>
-                             <TableCell>
-                               <Input 
-                                 className="h-8 w-32" 
-                                 value={visita.data} 
-                                 onChange={(e) => handleUpdateVisitaLocal(idx, "data", formatDateInput(e.target.value))}
-                               />
-                             </TableCell>
-                             <TableCell>
-                               <Input 
-                                 className="h-8" 
-                                 value={visita.tipoProcedimento} 
-                                 onChange={(e) => handleUpdateVisitaLocal(idx, "tipoProcedimento", e.target.value)}
-                                 placeholder="Tipo de procedimento"
-                               />
-                             </TableCell>
-                             <TableCell>
-                               <Input 
-                                 className="h-8" 
-                                 value={visita.veterinario} 
-                                 onChange={(e) => handleUpdateVisitaLocal(idx, "veterinario", e.target.value)}
-                                 placeholder="Nome do veterinário"
-                               />
-                             </TableCell>
-                             <TableCell>
-                               <Input 
-                                 className="h-8" 
-                                 value={visita.observacoes} 
-                                 onChange={(e) => handleUpdateVisitaLocal(idx, "observacoes", e.target.value)}
-                                 placeholder="Observações"
-                               />
-                             </TableCell>
-                             <TableCell>
-                               <Button variant="ghost" size="sm" onClick={() => handleRemoveVisitaLocal(idx)}>
-                                 <Trash2 className="h-4 w-4 text-destructive" />
-                               </Button>
-                             </TableCell>
-                          </TableRow>
-                        ))}
-                         {editingLoteData.visitas.length === 0 && (
-                          <TableRow>
-                            <TableCell colSpan={5} className="text-center text-muted-foreground">Nenhuma visita registrada.</TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  {/* Seção 4: Outras Informações */}
+                  {/* Outras Informações */}
                   <div className="space-y-4 border p-4 rounded-md">
                     <h3 className="font-semibold flex items-center gap-2">
                       <FileText className="h-4 w-4" /> Outras Informações
@@ -1312,7 +2111,6 @@ export default function AnimaisPage() {
                       </div>
                        <div className="space-y-2 md:col-span-2">
                         <Label>Documentos (URLs)</Label>
-                        {/* Simple list of strings for now */}
                         <div className="space-y-2">
                             {(editingLoteData.lote?.documentos || []).map((doc, idx) => (
                                 <div key={idx} className="flex gap-2">

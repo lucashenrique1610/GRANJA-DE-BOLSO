@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getSupabaseServerClient } from "@/lib/supabase-server"
+import { supabaseAdmin } from "@/lib/supabase-admin"
+import { verifyResourceAccess, handleAccessError } from "@/lib/security"
 
 export async function PUT(
   request: NextRequest,
@@ -7,16 +8,25 @@ export async function PUT(
 ) {
   try {
     const id = params.id
+    
+    // 1. Verificar Isolamento e Autorização
+    const access = await verifyResourceAccess(request, "lotes", id)
+    if (access.status !== "granted") {
+        // Retorna 401, 403 ou 404 conforme apropriado
+        return handleAccessError(access)
+    }
+    
+    // Usuário autenticado e dono do recurso
     const body = await request.json()
     const { quantidade, fornecedor, dataCompra, valorLote, valorAve, tipo, raca, femeas, machos } = body
 
-    // Validation
+    // Validação básica
     if (!id || !quantidade || !fornecedor || !dataCompra) {
       return NextResponse.json({ error: "Dados incompletos" }, { status: 400 })
     }
 
-    const supabase = getSupabaseServerClient()
-    const { error } = await supabase
+    // 2. Executar Update
+    const { error } = await supabaseAdmin
       .from("lotes")
       .update({
         quantidade,
@@ -31,10 +41,9 @@ export async function PUT(
         updated_at: new Date().toISOString()
       })
       .eq("id", id)
+      // Redundância de segurança: garantir que só atualiza se for do usuário
+      .eq("user_id", access.user.id)
 
-    // Note: If the batch doesn't exist in DB (because it's only in localStorage), Supabase might return no error but 0 rows affected.
-    // For this implementation, we assume success if no DB error occurs, to support the hybrid model where data might eventually sync.
-    
     if (error) {
       console.error("Erro ao atualizar lote no Supabase:", error)
       return NextResponse.json({ error: "Erro ao atualizar no banco de dados" }, { status: 500 })
