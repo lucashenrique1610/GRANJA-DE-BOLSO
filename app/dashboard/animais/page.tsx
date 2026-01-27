@@ -623,10 +623,10 @@ export default function AnimaisPage() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="editar-lotes">Editar Lotes</TabsTrigger>
             <TabsTrigger value="cadastro">Cadastrar Lote</TabsTrigger>
             <TabsTrigger value="peso">Registrar Peso</TabsTrigger>
             <TabsTrigger value="sexo">Atualizar Sexo</TabsTrigger>
-            <TabsTrigger value="editar-lotes">Editar Lotes</TabsTrigger>
           </TabsList>
 
           <TabsContent value="cadastro" className="space-y-4">

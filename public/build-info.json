@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
-  "commitHash": "73ed4b47d845c6e947df4553c9ea83cf8d0f2994",
-  "commitMessage": "fix: PWA installation prompt not appearing\n\n- Added PwaProvider context to handle 'beforeinstallprompt' event globally\n- Refactored PwaInstallButton and PwaInstallPrompt to use global context\n- Fixed race condition where prompt event was lost before components mounted\n- Ensured manifest is correctly linked in RootLayout",
-  "timestamp": "2026-01-20T11:25:39.422Z",
+  "commitHash": "83235bd66bacf93e6d9c6c004b5d223b3463205c",
+  "commitMessage": "feat: adicionar aba editar lotes em animais com historico saude e veterinario",
+  "timestamp": "2026-01-27T01:16:59.780Z",
   "environment": "development"
 }
