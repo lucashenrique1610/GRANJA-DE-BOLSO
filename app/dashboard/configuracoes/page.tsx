@@ -49,6 +49,8 @@ export default function ConfiguracoesPage() {
   const [activeTab, setActiveTab] = useState("perfil")
   const [supabaseStatus, setSupabaseStatus] = useState<"idle" | "ok" | "error">("idle")
   const [loadingConnection, setLoadingConnection] = useState(false)
+  const [syncStatus, setSyncStatus] = useState({ pendingItems: 0, lastSync: 0 })
+  const [isSyncing, setIsSyncing] = useState(false)
 
   // Configurações de perfil
   const [perfilForm, setPerfilForm] = useState({
@@ -303,7 +305,35 @@ export default function ConfiguracoesPage() {
 
   useEffect(() => {
     testarConexao()
+    updateSyncStatus()
+    const interval = setInterval(updateSyncStatus, 5000)
+    return () => clearInterval(interval)
   }, [])
+
+  const updateSyncStatus = () => {
+    setSyncStatus(DataService.getSyncStatus())
+  }
+
+  const handleForceSync = async () => {
+    setIsSyncing(true)
+    try {
+      await DataService.forceSync()
+      toast({
+        title: "Sincronização",
+        description: "Sincronização forçada concluída com sucesso.",
+      })
+      updateSyncStatus()
+    } catch (error) {
+      console.error("Erro na sincronização:", error)
+      toast({
+        title: "Erro",
+        description: "Falha ao sincronizar dados.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSyncing(false)
+    }
+  }
 
   const gerarBackup = () => {
     try {
@@ -535,7 +565,7 @@ export default function ConfiguracoesPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-5">
             <TabsTrigger value="perfil" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               Perfil
@@ -551,6 +581,10 @@ export default function ConfiguracoesPage() {
             <TabsTrigger value="backup" className="flex items-center gap-2">
               <Download className="h-4 w-4" />
               Backup
+            </TabsTrigger>
+            <TabsTrigger value="sincronizacao" className="flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Sincronização
             </TabsTrigger>
           </TabsList>
 
@@ -1215,6 +1249,64 @@ export default function ConfiguracoesPage() {
                         </AlertDescription>
                       </Alert>
                     </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="sincronizacao" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <RefreshCw className="h-5 w-5 text-primary" />
+                  Sincronização de Dados
+                </CardTitle>
+                <CardDescription>Gerencie a sincronização entre seus dados locais e o servidor</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="space-y-1">
+                    <h3 className="font-medium">Status da Sincronização</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {syncStatus.pendingItems === 0 
+                        ? "Todos os dados estão sincronizados" 
+                        : `${syncStatus.pendingItems} itens pendentes para envio`}
+                    </p>
+                    {syncStatus.lastSync > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Última sincronização: {new Date(syncStatus.lastSync).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isSyncing ? (
+                       <Button disabled>
+                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                         Sincronizando...
+                       </Button>
+                    ) : (
+                       <Button onClick={handleForceSync}>
+                         <RefreshCw className="mr-2 h-4 w-4" />
+                         Sincronizar Agora
+                       </Button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 border rounded-lg bg-muted/50">
+                  <h3 className="font-medium mb-2 flex items-center gap-2">
+                      <Cloud className="h-4 w-4" />
+                      Conexão com Supabase
+                  </h3>
+                  <div className="flex items-center gap-2">
+                      <div className={`h-2.5 w-2.5 rounded-full ${supabaseStatus === "ok" ? "bg-green-500" : supabaseStatus === "error" ? "bg-red-500" : "bg-gray-400"}`} />
+                      <span className="text-sm">
+                          {supabaseStatus === "ok" ? "Conectado" : supabaseStatus === "error" ? "Erro de conexão" : "Verificando..."}
+                      </span>
+                      <Button variant="ghost" size="sm" onClick={() => testarConexao(true)} disabled={loadingConnection}>
+                          {loadingConnection ? <Loader2 className="h-3 w-3 animate-spin" /> : "Testar novamente"}
+                      </Button>
                   </div>
                 </div>
               </CardContent>

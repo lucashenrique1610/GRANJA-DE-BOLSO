@@ -574,5 +574,17 @@ export const DataService = {
     prefs.lastShown[id] = ts
     DataService.saveTipPreferences(prefs)
   },
+
+  forceSync: async () => {
+    await syncService.processQueue()
+    await syncService.pullUpdates()
+  },
+
+  getSyncStatus: () => {
+    return {
+      pendingItems: syncService.getQueueLength(),
+      lastSync: syncService.getLastSyncTime()
+    }
+  },
 }
 
