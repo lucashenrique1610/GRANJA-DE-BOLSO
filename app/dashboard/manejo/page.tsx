@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import DashboardLayout from "@/components/dashboard-layout"
-import { Calendar } from "lucide-react"
+import { Calendar, Pencil, X } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { useTips } from "@/contexts/tips-context"
 import { useConfig } from "@/contexts/config-context"
@@ -28,6 +28,7 @@ export default function ManejoPage() {
   const [activeTab, setActiveTab] = useState("registro")
   const [lotes, setLotes] = useState<Lote[]>([])
   const [manejoDia, setManejoDia] = useState<ManejoDia>({})
+  const [editingManejo, setEditingManejo] = useState<{ data: string; periodo: "manha" | "tarde" } | null>(null)
   
   const [historicoRecs, setHistoricoRecs] = useState<
     { data: string; loteId: string; resumo: string; clima: ClimaAtual & ClimaDiario }[]
@@ -308,6 +309,40 @@ export default function ManejoPage() {
 
   // Removido: DateInput agora usa onChange com valor direto
 
+  const handleEditManejo = (manejo: ManejoHistorico) => {
+    setFormData({
+      data: manejo.data,
+      loteId: manejo.loteId,
+      periodo: manejo.periodo === "Manhã" ? "manha" : "tarde",
+      ovos: String(manejo.ovos),
+      ovosDanificados: String(manejo.ovosDanificados),
+      racao: String(manejo.racao),
+      porta: manejo.porta,
+      pesoOvos: String(manejo.pesoOvos || ""),
+      classificacao: manejo.classificacao || "",
+      outros: manejo.outros || "",
+    })
+    setEditingManejo({ data: manejo.data, periodo: manejo.periodo === "Manhã" ? "manha" : "tarde" })
+    setActiveTab("registro")
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const cancelarEdicao = () => {
+    setEditingManejo(null)
+    setFormData({
+      data: new Date().toLocaleDateString("pt-BR"),
+      loteId: "",
+      periodo: "manha",
+      ovos: "",
+      ovosDanificados: "",
+      racao: "",
+      porta: "fechada",
+      pesoOvos: "",
+      classificacao: "",
+      outros: "",
+    })
+  }
+
   const salvarManejo = () => {
     const { data, loteId, periodo, ovos, ovosDanificados, racao, porta, pesoOvos, classificacao, outros } = formData
 
@@ -331,6 +366,34 @@ export default function ManejoPage() {
 
     // Update manejoDia
     const updatedManejoDia = { ...manejoDia }
+    const estoque: Estoque = JSON.parse(localStorage.getItem("estoque") || "{}")
+
+    // Se estiver editando, reverter o impacto anterior no estoque
+    if (editingManejo) {
+      const oldData = updatedManejoDia[editingManejo.data]
+      if (oldData) {
+        const oldRecord = oldData[editingManejo.periodo]
+        if (oldRecord) {
+          estoque.ovos = (estoque.ovos || 0) - (oldRecord.ovos || 0) + (oldRecord.ovosDanificados || 0)
+          
+          // Se mudou a data ou período, remover o registro antigo
+          if (editingManejo.data !== data || editingManejo.periodo !== periodo) {
+            delete updatedManejoDia[editingManejo.data][editingManejo.periodo]
+            if (Object.keys(updatedManejoDia[editingManejo.data]).length === 0) {
+              delete updatedManejoDia[editingManejo.data]
+            }
+          }
+        }
+      }
+    } else {
+      // Se for novo registro, verificar se já existe para evitar duplicação no estoque
+      if (updatedManejoDia[data] && updatedManejoDia[data][periodo]) {
+        const existingRecord = updatedManejoDia[data][periodo]
+        // Reverter impacto do registro existente antes de sobrescrever
+        estoque.ovos = (estoque.ovos || 0) - (existingRecord.ovos || 0) + (existingRecord.ovosDanificados || 0)
+      }
+    }
+
     updatedManejoDia[data] = updatedManejoDia[data] || {}
     updatedManejoDia[data][periodo] = {
       status: "Concluído",
@@ -345,8 +408,7 @@ export default function ManejoPage() {
       classificacao,
     }
 
-    // Update estoque
-    const estoque: Estoque = JSON.parse(localStorage.getItem("estoque") || "{}")
+    // Update estoque (adicionar novo impacto)
     estoque.ovos = (estoque.ovos || 0) + Number.parseInt(ovos) - (Number.parseInt(ovosDanificados) || 0)
 
     // Save to localStorage
@@ -354,10 +416,11 @@ export default function ManejoPage() {
     localStorage.setItem("estoque", JSON.stringify(estoque))
 
     setManejoDia(updatedManejoDia)
+    setEditingManejo(null)
 
     toast({
       title: "Sucesso",
-      description: `Manejo de ${periodo === "manha" ? "manhã" : "tarde"} (${data}) salvo com sucesso!`,
+      description: `Manejo de ${periodo === "manha" ? "manhã" : "tarde"} (${data}) ${editingManejo ? "atualizado" : "salvo"} com sucesso!`,
     })
 
     recordAction("registrar_manejo", { periodo })
@@ -431,7 +494,7 @@ export default function ManejoPage() {
           <TabsContent value="registro" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Registrar Manejo</CardTitle>
+                <CardTitle>{editingManejo ? "Editar Manejo" : "Registrar Manejo"}</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -588,9 +651,24 @@ export default function ManejoPage() {
                   </div>
                 </div>
 
-                <Button className="mt-6 w-full" onClick={salvarManejo}>
-                  Salvar Manejo
-                </Button>
+                <div className="flex gap-4 mt-6">
+                  {editingManejo && (
+                    <Button variant="outline" className="w-full" onClick={cancelarEdicao}>
+                      <X className="mr-2 h-4 w-4" />
+                      Cancelar
+                    </Button>
+                  )}
+                  <Button className="w-full" onClick={salvarManejo}>
+                    {editingManejo ? (
+                      <>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Atualizar Manejo
+                      </>
+                    ) : (
+                      "Salvar Manejo"
+                    )}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -668,6 +746,7 @@ export default function ManejoPage() {
                         <TableHead>Porta</TableHead>
                         <TableHead>Peso (g)</TableHead>
                         <TableHead>Classificação</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -683,11 +762,16 @@ export default function ManejoPage() {
                             <TableCell>{manejo.porta}</TableCell>
                             <TableCell>{manejo.pesoOvos || "N/A"}</TableCell>
                             <TableCell>{manejo.classificacao || "N/A"}</TableCell>
+                            <TableCell className="text-right">
+                              <Button variant="ghost" size="icon" onClick={() => handleEditManejo(manejo)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         ))
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={9} className="text-center text-muted-foreground py-4">
+                          <TableCell colSpan={10} className="text-center text-muted-foreground py-4">
                             Nenhum registro de manejo encontrado
                           </TableCell>
                         </TableRow>

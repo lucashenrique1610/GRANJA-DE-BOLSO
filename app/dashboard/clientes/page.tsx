@@ -77,16 +77,16 @@ export default function ClientesPage() {
   const cadastrarClienteFisico = () => {
     const { nome, endereco, whatsapp, cpf } = formFisico
 
-    if (!nome || !endereco || !whatsapp || !cpf) {
+    if (!nome || !endereco || !whatsapp) {
       toast({
         title: "Erro",
-        description: "Preencha todos os campos!",
+        description: "Preencha todos os campos obrigatórios!",
         variant: "destructive",
       })
       return
     }
 
-    if (clientes.some((c) => c.cpfCnpj === cpf)) {
+    if (cpf && clientes.some((c) => c.cpfCnpj === cpf)) {
       toast({
         title: "Erro",
         description: "CPF já cadastrado!",
@@ -279,7 +279,7 @@ export default function ClientesPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="cnpj">CNPJ</Label>
+                    <Label htmlFor="cnpj">CNPJ (Opcional)</Label>
                     <Input
                       id="cnpj"
                       name="cnpj"

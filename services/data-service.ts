@@ -67,16 +67,18 @@ export interface Mortalidade {
 }
 
 export interface Cliente {
+  id: string
   nome: string
   endereco: string
   telefone: string
-  cpfCnpj: string
+  cpfCnpj?: string
   tipo: "fisico" | "juridico"
 }
 
 export interface Fornecedor {
+  id: string
   nome: string
-  cpfCnpj: string
+  cpfCnpj?: string
   telefone: string
   endereco: string
   produtos: string
@@ -187,6 +189,7 @@ async function upsertClienteSupabase(cliente: Cliente): Promise<boolean> {
                 "Authorization": `Bearer ${token}`
             },
             body: JSON.stringify({
+              id: cliente.id,
               nome: cliente.nome,
               endereco: cliente.endereco,
               telefone: cliente.telefone,
@@ -218,10 +221,11 @@ async function fetchClientesSupabase(): Promise<Cliente[]> {
       
       if (Array.isArray(arr)) {
         return arr.map((c: any) => ({
+          id: c.id || crypto.randomUUID(), // Ensure ID exists
           nome: c.nome,
           endereco: c.endereco,
           telefone: c.telefone,
-          cpfCnpj: c.cpf_cnpj || c.cpfCnpj, // Fallback just in case
+          cpfCnpj: c.cpf_cnpj || c.cpfCnpj || undefined,
           tipo: c.tipo
         }))
       }
@@ -317,7 +321,13 @@ export const DataService = {
   getClientes: (): Cliente[] => getItem<Cliente[]>("clientes", []),
   saveCliente: (cliente: Cliente) => {
     const clientes = DataService.getClientes()
-    const index = clientes.findIndex((c) => c.cpfCnpj === cliente.cpfCnpj)
+    
+    // Ensure ID
+    if (!cliente.id) {
+      cliente.id = crypto.randomUUID()
+    }
+
+    const index = clientes.findIndex((c) => c.id === cliente.id)
 
     if (index >= 0) {
       clientes[index] = cliente
@@ -334,7 +344,13 @@ export const DataService = {
   getFornecedores: (): Fornecedor[] => getItem<Fornecedor[]>("fornecedores", []),
   saveFornecedor: (fornecedor: Fornecedor) => {
     const fornecedores = DataService.getFornecedores()
-    const index = fornecedores.findIndex((f) => f.cpfCnpj === fornecedor.cpfCnpj)
+    
+    // Ensure ID
+    if (!fornecedor.id) {
+      fornecedor.id = crypto.randomUUID()
+    }
+
+    const index = fornecedores.findIndex((f) => f.id === fornecedor.id)
 
     if (index >= 0) {
       fornecedores[index] = fornecedor

@@ -67,22 +67,19 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { nome, endereco, telefone, cpf_cnpj, tipo } = body
-
-    if (!cpf_cnpj) {
-        return NextResponse.json({ error: "CPF/CNPJ required" }, { status: 400 })
-    }
+    const { id, nome, endereco, telefone, cpf_cnpj, tipo } = body
 
     const { error } = await supabaseAdmin
       .from("clientes")
       .upsert({
-        user_id: user.id, // Explicitly set user_id
+        id, // Use ID for upsert if provided
+        user_id: user.id,
         nome,
         endereco,
         telefone,
-        cpf_cnpj,
+        cpf_cnpj: cpf_cnpj || null, // Allow null
         tipo
-      }, { onConflict: "cpf_cnpj" })
+      }, { onConflict: "id" }) // Conflict on ID, not CPF/CNPJ
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })

@@ -567,7 +567,7 @@ export default function ComprasPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {fornecedores.map((fornecedor) => (
-                          <SelectItem key={fornecedor.cpfCnpj} value={fornecedor.cpfCnpj}>
+                          <SelectItem key={fornecedor.id || fornecedor.cpfCnpj} value={fornecedor.id || fornecedor.cpfCnpj || "unknown"}>
                             {fornecedor.nome}
                           </SelectItem>
                         ))}
@@ -669,7 +669,7 @@ export default function ComprasPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {fornecedores.map((fornecedor) => (
-                          <SelectItem key={fornecedor.cpfCnpj} value={fornecedor.cpfCnpj}>
+                          <SelectItem key={fornecedor.id || fornecedor.cpfCnpj} value={fornecedor.id || fornecedor.cpfCnpj || "unknown"}>
                             {fornecedor.nome}
                           </SelectItem>
                         ))}
@@ -806,7 +806,7 @@ export default function ComprasPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {fornecedores.map((fornecedor) => (
-                          <SelectItem key={fornecedor.cpfCnpj} value={fornecedor.cpfCnpj}>
+                          <SelectItem key={fornecedor.id || fornecedor.cpfCnpj} value={fornecedor.id || fornecedor.cpfCnpj || "unknown"}>
                             {fornecedor.nome}
                           </SelectItem>
                         ))}
@@ -871,7 +871,7 @@ export default function ComprasPage() {
                 <TableBody>
                   {compras.length > 0 ? (
                     compras.map((compra, index) => {
-                      const fornecedor = fornecedores.find((f) => f.cpfCnpj === compra.fornecedor)
+                      const fornecedor = fornecedores.find((f) => (f.id && f.id === compra.fornecedor) || f.cpfCnpj === compra.fornecedor)
                       return (
                         <TableRow key={index}>
                           <TableCell>{compra.data}</TableCell>

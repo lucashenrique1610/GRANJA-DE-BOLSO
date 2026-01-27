@@ -257,7 +257,7 @@ export default function VendasPage() {
                       </SelectTrigger>
                       <SelectContent>
                         {clientes.map((cliente) => (
-                          <SelectItem key={cliente.cpfCnpj} value={cliente.cpfCnpj}>
+                          <SelectItem key={cliente.id || cliente.cpfCnpj} value={cliente.id || cliente.cpfCnpj || "unknown"}>
                             {cliente.nome}
                           </SelectItem>
                         ))}
@@ -401,7 +401,7 @@ export default function VendasPage() {
                 <TableBody>
                   {vendas.length > 0 ? (
                     vendas.map((venda, index) => {
-                      const cliente = clientes.find((c) => c.cpfCnpj === venda.cliente)
+                      const cliente = clientes.find((c) => (c.id && c.id === venda.cliente) || c.cpfCnpj === venda.cliente)
                       return (
                         <TableRow key={index}>
                           <TableCell>{venda.data}</TableCell>

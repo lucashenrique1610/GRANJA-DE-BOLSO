@@ -152,7 +152,7 @@ export default function FornecedoresPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="cnpj">CNPJ</Label>
+                  <Label htmlFor="cnpj">CNPJ (Opcional)</Label>
                   <Input
                     id="cnpj"
                     name="cnpj"
