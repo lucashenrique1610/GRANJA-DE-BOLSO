@@ -28,9 +28,9 @@ export interface SyncQueueItem {
 const QUEUE_KEY = "granja_sync_queue"
 const LAST_SYNC_KEY = "granja_last_sync"
 
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// Initialize Supabase client safely
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co"
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "placeholder"
 const supabase = createClient(supabaseUrl, supabaseKey)
 
 class SyncService {
