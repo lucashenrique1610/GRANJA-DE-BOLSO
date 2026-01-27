@@ -11,6 +11,17 @@ export async function GET(req: Request) {
       return NextResponse.json({ user: null }, { status: 401 })
     }
 
+    // MOCK FOR DEVELOPMENT WITHOUT SUPABASE
+    if (token === "mock-access-token") {
+       return NextResponse.json({ 
+         user: {
+           id: "mock-user-id",
+           email: "teste@exemplo.com",
+           user_metadata: { nome: "Usuário Teste", telefone: "999999999" }
+         } 
+       })
+    }
+
     const supabase = getSupabaseServerClient(token)
     const { data: { user }, error } = await supabase.auth.getUser()
 

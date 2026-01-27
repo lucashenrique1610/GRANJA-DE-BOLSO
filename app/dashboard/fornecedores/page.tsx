@@ -91,7 +91,8 @@ export default function FornecedoresPage() {
     }
 
     // Create new supplier
-    const newFornecedor = {
+    const newFornecedor: Fornecedor = {
+      id: crypto.randomUUID(),
       nome,
       cpfCnpj: cnpj,
       telefone,

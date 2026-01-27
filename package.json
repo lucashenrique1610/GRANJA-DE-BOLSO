@@ -6,7 +6,7 @@
     "node": ">=18.17.0"
   },
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "prebuild": "node scripts/deploy-check.mjs",
     "build": "next build --webpack",
     "start": "next start",

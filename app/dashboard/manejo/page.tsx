@@ -317,7 +317,7 @@ export default function ManejoPage() {
       ovos: String(manejo.ovos),
       ovosDanificados: String(manejo.ovosDanificados),
       racao: String(manejo.racao),
-      porta: manejo.porta,
+      porta: (manejo.porta as "aberta" | "fechada"),
       pesoOvos: String(manejo.pesoOvos || ""),
       classificacao: manejo.classificacao || "",
       outros: manejo.outros || "",

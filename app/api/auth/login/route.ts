@@ -25,6 +25,29 @@ export async function POST(req: Request) {
     console.log(`[AUTH-LOGIN-${requestId}] Tentando autenticar: ${email}`)
 
     const supabase = getSupabaseServerClient()
+    
+    // MOCK FOR DEVELOPMENT WITHOUT SUPABASE
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+    if (!supabaseUrl || supabaseUrl.includes("placeholder")) {
+      console.warn(`[AUTH-LOGIN-${requestId}] Using MOCK login (Supabase env vars missing)`)
+      return NextResponse.json({
+        user: {
+          id: "mock-user-id",
+          email: email,
+          user_metadata: { nome: "Usuário Teste", telefone: "999999999" }
+        },
+        session: {
+          access_token: "mock-access-token",
+          refresh_token: "mock-refresh-token",
+          user: {
+            id: "mock-user-id",
+            email: email,
+            user_metadata: { nome: "Usuário Teste", telefone: "999999999" }
+          }
+        }
+      })
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,

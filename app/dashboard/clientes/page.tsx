@@ -97,6 +97,7 @@ export default function ClientesPage() {
 
     // Create new client
     const newCliente: Cliente = {
+      id: crypto.randomUUID(),
       nome,
       endereco,
       telefone: whatsapp,
@@ -147,6 +148,7 @@ export default function ClientesPage() {
 
     // Create new client
     const newCliente: Cliente = {
+      id: crypto.randomUUID(),
       nome,
       endereco,
       telefone,

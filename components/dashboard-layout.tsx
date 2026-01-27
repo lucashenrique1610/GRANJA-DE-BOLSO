@@ -44,6 +44,7 @@ import { useConfig } from "@/contexts/config-context"
 import { formatDateExtended } from "@/lib/date-utils"
 import { SubscriptionCheck } from "@/components/subscription-check"
 import { useSubscription } from "@/contexts/subscription-context"
+import { PwaInstallButton } from "@/components/pwa-install-button"
 import { Badge } from "@/components/ui/badge"
 
 interface DashboardLayoutProps {

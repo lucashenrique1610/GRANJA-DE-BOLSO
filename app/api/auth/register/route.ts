@@ -31,6 +31,28 @@ export async function POST(req: Request) {
     console.log(`[AUTH-REGISTER-${requestId}] Dados validados para email: ${email}`)
 
     const supabase = getSupabaseServerClient()
+
+    // MOCK FOR DEVELOPMENT
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || ""
+    if (!supabaseUrl || supabaseUrl.includes("placeholder")) {
+       console.warn(`[AUTH-REGISTER-${requestId}] Using MOCK register`)
+       return NextResponse.json({
+         user: {
+           id: "mock-user-id",
+           email: email,
+           user_metadata: userData || { nome: "Usuário Teste" }
+         },
+         session: {
+           access_token: "mock-access-token",
+           refresh_token: "mock-refresh-token",
+           user: {
+             id: "mock-user-id",
+             email: email,
+             user_metadata: userData || { nome: "Usuário Teste" }
+           }
+         }
+       })
+    }
     
     // Tentativa de cadastro no Supabase
     const { data, error } = await supabase.auth.signUp({
