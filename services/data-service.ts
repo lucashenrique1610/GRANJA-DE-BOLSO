@@ -15,6 +15,20 @@ export interface Lote {
   raca: string
   femeas: number
   machos: number
+  nome?: string
+  localizacao?: string
+  finalidade?: string
+  observacoes?: string
+  documentos?: string[]
+}
+
+export interface VisitaVeterinaria {
+  id: string
+  loteId: string
+  data: string
+  tipoProcedimento: string
+  veterinario: string
+  observacoes: string
 }
 
 export interface Manejo {
@@ -45,6 +59,7 @@ export interface Estoque {
 }
 
 export interface AplicacaoSaude {
+  id?: string
   data: string
   loteId: string
   fase: string

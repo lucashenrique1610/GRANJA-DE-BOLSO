@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import DashboardLayout from "@/components/dashboard-layout"
-import { Bird, Calendar, Scale, Users, Edit, X } from "lucide-react"
+import { Bird, Calendar, Scale, Users, Edit, X, Search, Filter, Plus, Trash2, FileText, Syringe, Stethoscope, MapPin, Info, Save, ArrowLeft } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import type { Lote, Fornecedor } from "@/services/data-service"
+import type { Lote, Fornecedor, VisitaVeterinaria, AplicacaoSaude } from "@/services/data-service"
 import { validateDate, formatDateInput } from "@/lib/date-utils"
 
 interface PesoLote {
@@ -49,6 +49,24 @@ export default function AnimaisPage() {
     machos: "",
   })
 
+  // New states for "Editar Lotes" tab
+  const [viewMode, setViewMode] = useState<"list" | "edit">("list")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("todos")
+  const [visitasVeterinarias, setVisitasVeterinarias] = useState<VisitaVeterinaria[]>([])
+  const [allAplicacoes, setAllAplicacoes] = useState<AplicacaoSaude[]>([])
+  
+  // State for the full editing form
+  const [editingLoteData, setEditingLoteData] = useState<{
+    lote: Lote | null;
+    aplicacoes: AplicacaoSaude[];
+    visitas: VisitaVeterinaria[];
+  }>({
+    lote: null,
+    aplicacoes: [],
+    visitas: []
+  })
+
   const editingLote = editingId ? lotes.find((l) => l.id === editingId) : null
   const isLocked = editingLote ? (editingLote.femeas > 0 || editingLote.machos > 0) : false
 
@@ -57,10 +75,14 @@ export default function AnimaisPage() {
       const lotesData = JSON.parse(localStorage.getItem("lotes") || "[]")
       const fornecedoresData = JSON.parse(localStorage.getItem("fornecedores") || "[]")
       const pesosLotesData = JSON.parse(localStorage.getItem("pesosLotes") || "[]")
+      const visitasData = JSON.parse(localStorage.getItem("visitasVeterinarias") || "[]")
+      const aplicacoesData = JSON.parse(localStorage.getItem("aplicacoesSaude") || "[]")
 
       setLotes(lotesData)
       setFornecedores(fornecedoresData)
       setPesosLotes(pesosLotesData)
+      setVisitasVeterinarias(visitasData)
+      setAllAplicacoes(aplicacoesData)
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
       toast({
@@ -456,6 +478,142 @@ export default function AnimaisPage() {
     })
   }
 
+  // Handlers for "Editar Lotes" Tab
+  const handleSelectLoteForEdit = (lote: Lote) => {
+    const loteAplicacoes = allAplicacoes.filter(app => app.loteId === lote.id)
+    const loteVisitas = visitasVeterinarias.filter(v => v.loteId === lote.id)
+    
+    setEditingLoteData({
+      lote: { ...lote },
+      aplicacoes: loteAplicacoes.map(a => ({...a})),
+      visitas: loteVisitas.map(v => ({...v}))
+    })
+    setViewMode("edit")
+  }
+
+  const handleFullEditChange = (field: keyof Lote, value: any) => {
+    if (!editingLoteData.lote) return
+    setEditingLoteData(prev => ({
+      ...prev,
+      lote: { ...prev.lote!, [field]: value }
+    }))
+  }
+
+  const handleAddAplicacaoLocal = () => {
+    if (!editingLoteData.lote) return
+    const newApp: AplicacaoSaude = {
+      id: `temp-${Date.now()}`,
+      loteId: editingLoteData.lote.id,
+      data: new Date().toLocaleDateString("pt-BR"),
+      fase: "",
+      tipo: "medicamento",
+      nome: "",
+      veterinario: "",
+      quantidade: 0,
+      observacoes: "",
+      proximaDose: "",
+      dataProxima: "",
+      formulacaoId: null
+    }
+    setEditingLoteData(prev => ({
+      ...prev,
+      aplicacoes: [...prev.aplicacoes, newApp]
+    }))
+  }
+
+  const handleUpdateAplicacaoLocal = (index: number, field: keyof AplicacaoSaude, value: any) => {
+    setEditingLoteData(prev => {
+      const newApps = [...prev.aplicacoes]
+      newApps[index] = { ...newApps[index], [field]: value }
+      return { ...prev, aplicacoes: newApps }
+    })
+  }
+
+  const handleRemoveAplicacaoLocal = (index: number) => {
+    setEditingLoteData(prev => {
+      const newApps = [...prev.aplicacoes]
+      newApps.splice(index, 1)
+      return { ...prev, aplicacoes: newApps }
+    })
+  }
+
+  const handleAddVisitaLocal = () => {
+    if (!editingLoteData.lote) return
+    const newVisita: VisitaVeterinaria = {
+      id: `temp-${Date.now()}`,
+      loteId: editingLoteData.lote.id,
+      data: new Date().toLocaleDateString("pt-BR"),
+      tipoProcedimento: "",
+      veterinario: "",
+      observacoes: ""
+    }
+    setEditingLoteData(prev => ({
+      ...prev,
+      visitas: [...prev.visitas, newVisita]
+    }))
+  }
+
+  const handleUpdateVisitaLocal = (index: number, field: keyof VisitaVeterinaria, value: any) => {
+    setEditingLoteData(prev => {
+      const newVisitas = [...prev.visitas]
+      newVisitas[index] = { ...newVisitas[index], [field]: value }
+      return { ...prev, visitas: newVisitas }
+    })
+  }
+
+  const handleRemoveVisitaLocal = (index: number) => {
+    setEditingLoteData(prev => {
+      const newVisitas = [...prev.visitas]
+      newVisitas.splice(index, 1)
+      return { ...prev, visitas: newVisitas }
+    })
+  }
+
+  const handleSaveFullEdit = () => {
+    if (!editingLoteData.lote) return
+
+    // Validation
+    if (!validateDate(editingLoteData.lote.dataCompra)) {
+      toast({ title: "Erro", description: "Data de compra inválida!", variant: "destructive" })
+      return
+    }
+    
+    for (const app of editingLoteData.aplicacoes) {
+        if (!validateDate(app.data)) {
+            toast({ title: "Erro", description: "Data inválida no histórico de aplicações!", variant: "destructive" })
+            return
+        }
+    }
+
+    for (const visita of editingLoteData.visitas) {
+        if (!validateDate(visita.data)) {
+            toast({ title: "Erro", description: "Data inválida no histórico veterinário!", variant: "destructive" })
+            return
+        }
+    }
+
+    // Update Lote
+    const updatedLotes = lotes.map(l => l.id === editingLoteData.lote!.id ? editingLoteData.lote! : l)
+    setLotes(updatedLotes)
+    localStorage.setItem("lotes", JSON.stringify(updatedLotes))
+
+    // Update Aplicacoes
+    const otherApps = allAplicacoes.filter(a => a.loteId !== editingLoteData.lote!.id)
+    const finalApps = [...otherApps, ...editingLoteData.aplicacoes]
+    setAllAplicacoes(finalApps)
+    localStorage.setItem("aplicacoesSaude", JSON.stringify(finalApps))
+
+    // Update Visitas
+    const otherVisitas = visitasVeterinarias.filter(v => v.loteId !== editingLoteData.lote!.id)
+    const finalVisitas = [...otherVisitas, ...editingLoteData.visitas]
+    setVisitasVeterinarias(finalVisitas)
+    localStorage.setItem("visitasVeterinarias", JSON.stringify(finalVisitas))
+
+    toast({ title: "Sucesso", description: "Alterações salvas com sucesso!" })
+    setViewMode("list")
+    setEditingLoteData({ lote: null, aplicacoes: [], visitas: [] })
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -464,10 +622,11 @@ export default function AnimaisPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="cadastro">Cadastrar Lote</TabsTrigger>
             <TabsTrigger value="peso">Registrar Peso</TabsTrigger>
             <TabsTrigger value="sexo">Atualizar Sexo</TabsTrigger>
+            <TabsTrigger value="editar-lotes">Editar Lotes</TabsTrigger>
           </TabsList>
 
           <TabsContent value="cadastro" className="space-y-4">
@@ -822,6 +981,375 @@ export default function AnimaisPage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="editar-lotes" className="space-y-4">
+            {viewMode === "list" ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Edit className="h-5 w-5 text-primary" />
+                      Editar Lotes Existentes
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-col md:flex-row gap-4 mb-6">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar por nome, ID ou fornecedor..."
+                        className="pl-8"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                      />
+                    </div>
+                    <div className="w-full md:w-[200px]">
+                      <Select value={statusFilter} onValueChange={setStatusFilter}>
+                        <SelectTrigger>
+                          <Filter className="w-4 h-4 mr-2" />
+                          <SelectValue placeholder="Status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos</SelectItem>
+                          <SelectItem value="ativos">Ativos</SelectItem>
+                          <SelectItem value="finalizados">Finalizados</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>ID</TableHead>
+                          <TableHead>Nome</TableHead>
+                          <TableHead>Qtd. Animais</TableHead>
+                          <TableHead>Data Compra</TableHead>
+                          <TableHead>Última Aplicação</TableHead>
+                          <TableHead>Última Visita</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {lotes
+                          .filter((lote) => {
+                            const matchesSearch = 
+                              lote.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              (lote.nome && lote.nome.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                              lote.fornecedor.toLowerCase().includes(searchTerm.toLowerCase())
+                            
+                            const matchesStatus = statusFilter === "todos" ? true :
+                              statusFilter === "ativos" ? lote.quantidade > 0 : lote.quantidade === 0
+
+                            return matchesSearch && matchesStatus
+                          })
+                          .map((lote) => {
+                             const lastApp = allAplicacoes
+                               .filter(a => a.loteId === lote.id)
+                               .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0]
+                             const lastVisit = visitasVeterinarias
+                               .filter(v => v.loteId === lote.id)
+                               .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())[0]
+
+                             return (
+                              <TableRow key={lote.id}>
+                                <TableCell className="font-medium">{lote.id}</TableCell>
+                                <TableCell>{lote.nome || "-"}</TableCell>
+                                <TableCell>{lote.quantidade}</TableCell>
+                                <TableCell>{lote.dataCompra}</TableCell>
+                                <TableCell>{lastApp ? lastApp.data : "-"}</TableCell>
+                                <TableCell>{lastVisit ? lastVisit.data : "-"}</TableCell>
+                                <TableCell>
+                                  <Badge variant={lote.quantidade > 0 ? "default" : "secondary"}>
+                                    {lote.quantidade > 0 ? "Ativo" : "Finalizado"}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <Button size="sm" variant="outline" onClick={() => handleSelectLoteForEdit(lote)}>
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Editar
+                                  </Button>
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" onClick={() => setViewMode("list")}>
+                      <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    Editando Lote: {editingLoteData.lote?.id}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Seção 1: Informações Básicas */}
+                  <div className="space-y-4 border p-4 rounded-md">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <Info className="h-4 w-4" /> Informações Básicas
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label>Nome do Lote</Label>
+                        <Input 
+                          value={editingLoteData.lote?.nome || ""} 
+                          onChange={(e) => handleFullEditChange("nome", e.target.value)}
+                          placeholder="Ex: Lote A - Galpão 1"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Quantidade</Label>
+                        <Input 
+                          type="number"
+                          value={editingLoteData.lote?.quantidade || 0} 
+                          onChange={(e) => handleFullEditChange("quantidade", Number(e.target.value))}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Data de Compra</Label>
+                         <div className="relative">
+                            <Input
+                              value={editingLoteData.lote?.dataCompra || ""}
+                              onChange={(e) => handleFullEditChange("dataCompra", formatDateInput(e.target.value))}
+                              maxLength={10}
+                            />
+                            <Calendar className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                          </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Seção 2: Histórico de Aplicações */}
+                  <div className="space-y-4 border p-4 rounded-md">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-semibold flex items-center gap-2">
+                        <Syringe className="h-4 w-4" /> Histórico de Aplicações
+                      </h3>
+                      <Button size="sm" onClick={handleAddAplicacaoLocal} variant="outline">
+                        <Plus className="h-4 w-4 mr-2" /> Adicionar
+                      </Button>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Medicamento</TableHead>
+                          <TableHead>Dosagem</TableHead>
+                          <TableHead>Responsável</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {editingLoteData.aplicacoes.map((app, idx) => (
+                          <TableRow key={app.id || idx}>
+                             <TableCell>
+                               <Input 
+                                 className="h-8 w-32" 
+                                 value={app.data} 
+                                 onChange={(e) => handleUpdateAplicacaoLocal(idx, "data", formatDateInput(e.target.value))}
+                               />
+                             </TableCell>
+                             <TableCell>
+                               <Input 
+                                 className="h-8" 
+                                 value={app.nome} 
+                                 onChange={(e) => handleUpdateAplicacaoLocal(idx, "nome", e.target.value)}
+                                 placeholder="Nome do medicamento"
+                               />
+                             </TableCell>
+                             <TableCell>
+                               <Input 
+                                 className="h-8 w-24" 
+                                 type="number"
+                                 value={app.quantidade} 
+                                 onChange={(e) => handleUpdateAplicacaoLocal(idx, "quantidade", Number(e.target.value))}
+                               />
+                             </TableCell>
+                             <TableCell>
+                               <Input 
+                                 className="h-8" 
+                                 value={app.veterinario} 
+                                 onChange={(e) => handleUpdateAplicacaoLocal(idx, "veterinario", e.target.value)}
+                                 placeholder="Responsável"
+                               />
+                             </TableCell>
+                             <TableCell>
+                               <Button variant="ghost" size="sm" onClick={() => handleRemoveAplicacaoLocal(idx)}>
+                                 <Trash2 className="h-4 w-4 text-destructive" />
+                               </Button>
+                             </TableCell>
+                          </TableRow>
+                        ))}
+                        {editingLoteData.aplicacoes.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground">Nenhuma aplicação registrada.</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Seção 3: Histórico Veterinário */}
+                  <div className="space-y-4 border p-4 rounded-md">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-semibold flex items-center gap-2">
+                        <Stethoscope className="h-4 w-4" /> Histórico Veterinário
+                      </h3>
+                      <Button size="sm" onClick={handleAddVisitaLocal} variant="outline">
+                        <Plus className="h-4 w-4 mr-2" /> Adicionar
+                      </Button>
+                    </div>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Procedimento</TableHead>
+                          <TableHead>Veterinário</TableHead>
+                          <TableHead>Observações</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                         {editingLoteData.visitas.map((visita, idx) => (
+                          <TableRow key={visita.id || idx}>
+                             <TableCell>
+                               <Input 
+                                 className="h-8 w-32" 
+                                 value={visita.data} 
+                                 onChange={(e) => handleUpdateVisitaLocal(idx, "data", formatDateInput(e.target.value))}
+                               />
+                             </TableCell>
+                             <TableCell>
+                               <Input 
+                                 className="h-8" 
+                                 value={visita.tipoProcedimento} 
+                                 onChange={(e) => handleUpdateVisitaLocal(idx, "tipoProcedimento", e.target.value)}
+                                 placeholder="Tipo de procedimento"
+                               />
+                             </TableCell>
+                             <TableCell>
+                               <Input 
+                                 className="h-8" 
+                                 value={visita.veterinario} 
+                                 onChange={(e) => handleUpdateVisitaLocal(idx, "veterinario", e.target.value)}
+                                 placeholder="Nome do veterinário"
+                               />
+                             </TableCell>
+                             <TableCell>
+                               <Input 
+                                 className="h-8" 
+                                 value={visita.observacoes} 
+                                 onChange={(e) => handleUpdateVisitaLocal(idx, "observacoes", e.target.value)}
+                                 placeholder="Observações"
+                               />
+                             </TableCell>
+                             <TableCell>
+                               <Button variant="ghost" size="sm" onClick={() => handleRemoveVisitaLocal(idx)}>
+                                 <Trash2 className="h-4 w-4 text-destructive" />
+                               </Button>
+                             </TableCell>
+                          </TableRow>
+                        ))}
+                         {editingLoteData.visitas.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={5} className="text-center text-muted-foreground">Nenhuma visita registrada.</TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Seção 4: Outras Informações */}
+                  <div className="space-y-4 border p-4 rounded-md">
+                    <h3 className="font-semibold flex items-center gap-2">
+                      <FileText className="h-4 w-4" /> Outras Informações
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       <div className="space-y-2">
+                        <Label>Localização</Label>
+                        <div className="relative">
+                           <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                           <Input 
+                              className="pl-8"
+                              value={editingLoteData.lote?.localizacao || ""} 
+                              onChange={(e) => handleFullEditChange("localizacao", e.target.value)}
+                              placeholder="Ex: Galpão 3"
+                            />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Finalidade</Label>
+                        <Select 
+                          value={editingLoteData.lote?.finalidade} 
+                          onValueChange={(val) => handleFullEditChange("finalidade", val)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="corte">Corte</SelectItem>
+                            <SelectItem value="leite">Leite</SelectItem>
+                            <SelectItem value="postura">Postura (Ovos)</SelectItem>
+                            <SelectItem value="reproducao">Reprodução</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                       <div className="space-y-2 md:col-span-2">
+                        <Label>Observações Gerais</Label>
+                        <Input 
+                          value={editingLoteData.lote?.observacoes || ""} 
+                          onChange={(e) => handleFullEditChange("observacoes", e.target.value)}
+                        />
+                      </div>
+                       <div className="space-y-2 md:col-span-2">
+                        <Label>Documentos (URLs)</Label>
+                        {/* Simple list of strings for now */}
+                        <div className="space-y-2">
+                            {(editingLoteData.lote?.documentos || []).map((doc, idx) => (
+                                <div key={idx} className="flex gap-2">
+                                    <Input readOnly value={doc} />
+                                    <Button variant="ghost" size="icon" onClick={() => {
+                                        const newDocs = [...(editingLoteData.lote?.documentos || [])]
+                                        newDocs.splice(idx, 1)
+                                        handleFullEditChange("documentos", newDocs)
+                                    }}><Trash2 className="h-4 w-4" /></Button>
+                                </div>
+                            ))}
+                             <div className="flex gap-2">
+                                <Input placeholder="Adicionar URL/Nome do documento" id="new-doc-input" />
+                                <Button type="button" onClick={() => {
+                                    const input = document.getElementById("new-doc-input") as HTMLInputElement
+                                    if (input.value) {
+                                        const newDocs = [...(editingLoteData.lote?.documentos || []), input.value]
+                                        handleFullEditChange("documentos", newDocs)
+                                        input.value = ""
+                                    }
+                                }}>Adicionar</Button>
+                             </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-4 pt-4">
+                    <Button variant="outline" onClick={() => setViewMode("list")}>Cancelar</Button>
+                    <Button onClick={handleSaveFullEdit}>
+                      <Save className="h-4 w-4 mr-2" />
+                      Salvar Alterações
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
         </Tabs>
       </div>
