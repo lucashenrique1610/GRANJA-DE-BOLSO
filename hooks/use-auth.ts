@@ -145,10 +145,10 @@ export function useAuth() {
     }
   }
 
-  const updateUser = async (updatedUser: User): Promise<boolean> => {
+  const updateUser = async (updatedUser: User): Promise<{ ok: boolean; error?: string }> => {
     try {
       const storedSession = localStorage.getItem(SESSION_KEY)
-      if (!storedSession) return false
+      if (!storedSession) return { ok: false, error: "Sessão não encontrada" }
       const { access_token } = JSON.parse(storedSession)
 
       const res = await fetch("/api/auth/update", {
@@ -160,13 +160,15 @@ export function useAuth() {
         body: JSON.stringify({ data: { nome: updatedUser.nome, telefone: updatedUser.telefone } })
       })
 
+      const data = await res.json()
+
       if (res.ok) {
         setUser(prev => prev ? { ...prev, ...updatedUser } : null)
-        return true
+        return { ok: true }
       }
-      return false
-    } catch {
-      return false
+      return { ok: false, error: data.error || "Erro ao atualizar perfil" }
+    } catch (e: any) {
+      return { ok: false, error: e.message || "Erro de conexão" }
     }
   }
 

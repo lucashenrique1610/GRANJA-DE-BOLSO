@@ -222,16 +222,16 @@ export default function ConfiguracoesPage() {
 
     // Atualizar dados do usuário
     if (updateUser) {
-      const ok = await updateUser({
+      const result = await updateUser({
         ...(user || { id: "", email: perfilForm.email }),
         nome: perfilForm.nome,
         email: perfilForm.email,
         telefone: perfilForm.telefone,
       })
       toast({
-        title: ok ? "Sucesso" : "Erro",
-        description: ok ? "Perfil atualizado com sucesso!" : "Falha ao atualizar o perfil",
-        variant: ok ? undefined : "destructive",
+        title: result.ok ? "Sucesso" : "Erro",
+        description: result.ok ? "Perfil atualizado com sucesso!" : (result.error || "Falha ao atualizar o perfil"),
+        variant: result.ok ? undefined : "destructive",
       })
     }
   }
