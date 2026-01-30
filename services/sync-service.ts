@@ -141,8 +141,31 @@ class SyncService {
     const { table, action, data, entityId } = item
     
     // Get current user
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error("No session")
+    let { data: { session } } = await supabase.auth.getSession()
+
+    // Fallback: Check localStorage if using custom auth flow (granja_session)
+    if (!session && typeof localStorage !== "undefined") {
+        try {
+            const stored = localStorage.getItem("granja_session")
+            if (stored) {
+                 const { access_token, refresh_token } = JSON.parse(stored)
+                 if (access_token) {
+                     // Set session manually to enable RLS
+                     const { data, error } = await supabase.auth.setSession({ 
+                        access_token, 
+                        refresh_token: refresh_token || "" 
+                     })
+                     if (!error && data.session) {
+                        session = data.session
+                     }
+                 }
+            }
+        } catch (e) {
+            console.warn("Failed to restore session from storage:", e)
+        }
+    }
+
+    if (!session) throw new Error("No session (User not logged in)")
 
     // Inject user_id if needed
     const payload = { ...this.camelToSnake(data), user_id: session.user.id }
