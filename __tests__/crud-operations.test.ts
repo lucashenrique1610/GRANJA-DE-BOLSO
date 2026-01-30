@@ -145,11 +145,15 @@ describe('Supabase CRUD & RLS Integration Tests', () => {
     it('SECURITY: Should NOT access other users data', async () => {
         // Create a second user and some data for them (via Admin)
         const otherEmail = `other.${Date.now()}@example.com`;
-        const { data: otherUser } = await adminClient.auth.admin.createUser({
+        const { data: otherUser, error: createError } = await adminClient.auth.admin.createUser({
             email: otherEmail,
             password: 'password123',
             email_confirm: true
         });
+
+        if (createError || !otherUser?.user) {
+            throw new Error("Failed to create second user for security test");
+        }
 
         const otherLoteId = crypto.randomUUID();
         await adminClient.from('lotes').insert({
