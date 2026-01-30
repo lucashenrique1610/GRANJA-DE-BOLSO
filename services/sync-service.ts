@@ -40,6 +40,22 @@ class SyncService {
 
   constructor() {
     this.loadQueue()
+    if (typeof window !== "undefined") {
+        window.addEventListener("online", () => {
+            console.log("[Sync] Online detected. Processing queue & pulling updates...")
+            this.processQueue()
+            this.pullUpdates()
+        })
+        
+        // Initial sync on load if online
+        if (navigator.onLine) {
+            // Small delay to ensure auth is ready
+            setTimeout(() => {
+                this.processQueue()
+                this.pullUpdates()
+            }, 2000)
+        }
+    }
   }
 
   private loadQueue() {
