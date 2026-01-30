@@ -17,6 +17,13 @@ export async function getUserFromRequest(req: Request) {
 
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
   
-  if (error || !user) return null
+  if (error) {
+    console.error("[AuthHelper] Falha ao verificar token:", error.message)
+    return null
+  }
+  if (!user) {
+    console.warn("[AuthHelper] Token válido mas usuário não encontrado")
+    return null
+  }
   return user
 }

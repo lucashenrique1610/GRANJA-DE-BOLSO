@@ -59,6 +59,7 @@ export async function POST(req: Request) {
       }, { onConflict: "id" })
 
     if (error) {
+      console.error("[API/Clientes] Erro ao salvar cliente:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
