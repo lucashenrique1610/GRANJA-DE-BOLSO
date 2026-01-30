@@ -138,8 +138,21 @@ class SyncService {
     for (const item of queueSnapshot) {
       try {
         await this.syncItem(item)
-      } catch (error) {
+      } catch (error: any) {
         console.error(`Failed to sync item ${item.id}:`, error)
+        
+        // Critical Error: Foreign Key Violation (usually invalid user_id)
+        if (error?.code === '23503' && error?.message?.includes('user_id')) {
+             console.error("CRITICAL: Invalid User ID in session. Requesting logout.")
+             if (typeof window !== "undefined") {
+                 window.dispatchEvent(new CustomEvent("granja-auth-error", { 
+                     detail: { message: "Sessão inválida. Por favor, faça login novamente." }
+                 }))
+             }
+             // Do not retry this item, it will never succeed with current user
+             continue; 
+        }
+
         item.retryCount++
         if (item.retryCount < 5) { // Give up after 5 tries
              remainingQueue.push(item)

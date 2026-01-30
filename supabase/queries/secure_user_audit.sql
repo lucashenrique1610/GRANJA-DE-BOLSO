@@ -48,7 +48,7 @@ SELECT
     s.id as subscription_id,
     s.status,
     s.current_period_end,
-    s.plan_id
+    COALESCE(s.price_id, s.metadata->>'plan_id') as plan_id
 FROM auth.users u
 JOIN public.subscriptions s ON u.id::text = s.user_id
 WHERE u.email = 'email@alvo.com'; -- <--- EDITE AQUI
