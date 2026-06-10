@@ -500,5 +500,100 @@ export const DataService = {
 
   getSyncStatus() {
     return { pendingItems: 0, lastSync: null }
+  },
+
+  // Ingredientes
+  async getIngredientes(): Promise<Ingrediente[]> {
+    return apiRequest('ingredientes')
+  },
+  
+  async saveIngrediente(ingrediente: Ingrediente): Promise<Ingrediente> {
+    return apiRequest('ingredientes', 'POST', ingrediente)
+  },
+  
+  async deleteIngrediente(id: string): Promise<void> {
+    return apiRequest(`ingredientes/${id}', 'DELETE')
+  },
+
+  // Formulacoes
+  async getFormulacoes(): Promise<Formulacao[]> {
+    return apiRequest('formulacoes')
+  },
+  
+  async saveFormulacao(formulacao: Formulacao): Promise<Formulacao> {
+    return apiRequest('formulacoes', 'POST', formulacao)
+  },
+  
+  async deleteFormulacao(id: string): Promise<void> {
+    return apiRequest(`formulacoes/${id}', 'DELETE')
+  },
+
+  // Estoque Racoes
+  async getEstoqueRacoes(): Promise<EstoqueRacao[]> {
+    return apiRequest('estoque-racoes')
+  },
+  
+  async saveEstoqueRacao(estoque: EstoqueRacao): Promise<EstoqueRacao> {
+    return apiRequest('estoque-racoes', 'POST', estoque)
+  },
+  
+  async deleteEstoqueRacao(id: string): Promise<void> {
+    return apiRequest(`estoque-racoes/${id}', 'DELETE')
   }
+}
+
+// Type exports (added new types above
+export interface Ingrediente {
+  id?: string
+  user_id?: string
+  nome: string
+  proteina: number
+  energia: number
+  calcio: number
+  fosforo: number
+  metionina: number
+  lisina: number
+  fibra: number
+  preco: number
+  estoque: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface ItemFormulacao {
+  id?: string
+  formulacao_id?: string
+  ingrediente_id: string
+  percentual: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface Formulacao {
+  id?: string
+  user_id?: string
+  nome: string
+  descricao?: string
+  fase: 'inicial' | 'crescimento' | 'postura'
+  ativa: boolean
+  duracao_dias?: number
+  quantidade_total?: number
+  consumo_diario?: number
+  lote_id?: string
+  ajuste_ambiental?: any
+  data_termino_prevista?: string
+  created_at?: string
+  updated_at?: string
+  itens?: ItemFormulacao[]
+}
+
+export interface EstoqueRacao {
+  id?: string
+  user_id?: string
+  formulacao_id?: string
+  nome: string
+  quantidade: number
+  fase: 'inicial' | 'crescimento' | 'postura'
+  created_at?: string
+  updated_at?: string
 }

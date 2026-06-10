@@ -348,6 +348,86 @@ CREATE INDEX IF NOT EXISTS backups_user_id_idx ON backups(user_id);
 ALTER TABLE backups ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can manage their own backups" ON backups FOR ALL USING (user_id = auth.uid());
 
+-- TABLE: ingredientes
+CREATE TABLE ingredientes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    nome TEXT NOT NULL,
+    proteina NUMERIC(10,2) DEFAULT 0,
+    energia NUMERIC(10,2) DEFAULT 0,
+    calcio NUMERIC(10,2) DEFAULT 0,
+    fosforo NUMERIC(10,2) DEFAULT 0,
+    metionina NUMERIC(10,2) DEFAULT 0,
+    lisina NUMERIC(10,2) DEFAULT 0,
+    fibra NUMERIC(10,2) DEFAULT 0,
+    preco NUMERIC(10,2) DEFAULT 0,
+    estoque NUMERIC(10,2) DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE ingredientes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their own ingredientes" ON ingredientes FOR ALL USING (auth.uid() = user_id);
+CREATE TRIGGER update_ingredientes_modtime BEFORE UPDATE ON ingredientes FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+-- TABLE: formulacoes
+CREATE TABLE formulacoes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    nome TEXT NOT NULL,
+    descricao TEXT,
+    fase TEXT CHECK (fase IN ('inicial', 'crescimento', 'postura')),
+    ativa BOOLEAN DEFAULT FALSE,
+    duracao_dias INTEGER,
+    quantidade_total NUMERIC(10,2),
+    consumo_diario NUMERIC(10,2),
+    lote_id UUID REFERENCES lotes(id) ON DELETE SET NULL,
+    ajuste_ambiental JSONB,
+    data_termino_prevista DATE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE formulacoes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their own formulacoes" ON formulacoes FOR ALL USING (auth.uid() = user_id);
+CREATE TRIGGER update_formulacoes_modtime BEFORE UPDATE ON formulacoes FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+-- TABLE: itens_formulacao
+CREATE TABLE itens_formulacao (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    formulacao_id UUID REFERENCES formulacoes(id) ON DELETE CASCADE NOT NULL,
+    ingrediente_id UUID REFERENCES ingredientes(id) ON DELETE CASCADE NOT NULL,
+    percentual NUMERIC(10,2) NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE itens_formulacao ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their own itens_formulacao" ON itens_formulacao FOR ALL USING (
+    EXISTS (
+        SELECT 1 FROM formulacoes
+        WHERE formulacoes.id = itens_formulacao.formulacao_id
+        AND formulacoes.user_id = auth.uid()
+    )
+);
+CREATE TRIGGER update_itens_formulacao_modtime BEFORE UPDATE ON itens_formulacao FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
+-- TABLE: estoque_racoes
+CREATE TABLE estoque_racoes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    formulacao_id UUID REFERENCES formulacoes(id) ON DELETE SET NULL,
+    nome TEXT NOT NULL,
+    quantidade NUMERIC(10,2) DEFAULT 0,
+    fase TEXT CHECK (fase IN ('inicial', 'crescimento', 'postura')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE estoque_racoes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can manage their own estoque_racoes" ON estoque_racoes FOR ALL USING (auth.uid() = user_id);
+CREATE TRIGGER update_estoque_racoes_modtime BEFORE UPDATE ON estoque_racoes FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
+
 -- =============================================
 -- 5. ÍNDICES DE PERFORMANCE
 -- =============================================
@@ -364,6 +444,10 @@ CREATE INDEX IF NOT EXISTS idx_vendas_user_id ON vendas(user_id);
 CREATE INDEX IF NOT EXISTS idx_tip_feedbacks_user_id ON tip_feedbacks(user_id);
 CREATE INDEX IF NOT EXISTS idx_tip_preferences_user_id ON tip_preferences(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_ingredientes_user_id ON ingredientes(user_id);
+CREATE INDEX IF NOT EXISTS idx_formulacoes_user_id ON formulacoes(user_id);
+CREATE INDEX IF NOT EXISTS idx_itens_formulacao_formulacao_id ON itens_formulacao(formulacao_id);
+CREATE INDEX IF NOT EXISTS idx_estoque_racoes_user_id ON estoque_racoes(user_id);
 
 -- =============================================
 -- FIM DO SCRIPT!
