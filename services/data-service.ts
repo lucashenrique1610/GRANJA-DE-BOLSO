@@ -512,7 +512,7 @@ export const DataService = {
   },
   
   async deleteIngrediente(id: string): Promise<void> {
-    return apiRequest(`ingredientes/${id}', 'DELETE')
+    return apiRequest(`ingredientes/${id}`, 'DELETE')
   },
 
   // Formulacoes
@@ -525,7 +525,7 @@ export const DataService = {
   },
   
   async deleteFormulacao(id: string): Promise<void> {
-    return apiRequest(`formulacoes/${id}', 'DELETE')
+    return apiRequest(`formulacoes/${id}`, 'DELETE')
   },
 
   // Estoque Racoes
@@ -538,7 +538,7 @@ export const DataService = {
   },
   
   async deleteEstoqueRacao(id: string): Promise<void> {
-    return apiRequest(`estoque-racoes/${id}', 'DELETE')
+    return apiRequest(`estoque-racoes/${id}`, 'DELETE')
   }
 }
 
