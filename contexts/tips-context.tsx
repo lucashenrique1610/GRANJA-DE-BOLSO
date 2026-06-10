@@ -93,7 +93,7 @@ export function TipsProvider({ children }: { children: ReactNode }) {
       if (!match) return
 
       const now = Date.now()
-      const last = prefs.lastShown[match.id] || 0
+      const last = (prefs.lastShown || prefs.last_shown || {})[match.id] || 0
       const dismissed = prefs.dismissed.includes(match.id)
       const irrelevant = prefs.irrelevant.includes(match.id)
       if (irrelevant) return

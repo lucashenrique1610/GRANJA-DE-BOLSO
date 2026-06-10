@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
-  "commitHash": "c96aae6872a80e72c11de8fffd0d094db51c5681",
-  "commitMessage": "feat: config sync tab, sql policies and supabase connection fix",
-  "timestamp": "2026-01-27T16:52:30.323Z",
+  "commitHash": "d8ac3ba4e532ca3caa051756958ac668c112edc6",
+  "commitMessage": "Corrige configuração do Supabase e mantém funcionalidade de trial",
+  "timestamp": "2026-06-10T22:42:40.756Z",
   "environment": "development"
 }

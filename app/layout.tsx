@@ -9,7 +9,7 @@ import { SubscriptionProvider } from "@/contexts/subscription-context"
 import { TipsProvider } from "@/contexts/tips-context"
 import { PwaProvider } from "@/contexts/pwa-context"
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt"
-import { SyncProvider } from "@/components/sync-provider"
+
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -47,7 +47,6 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
           <PwaProvider>
             <ConfigProvider>
-              <SyncProvider>
                 <SubscriptionProvider>
                   <TipsProvider>
                     {children}
@@ -55,7 +54,6 @@ export default function RootLayout({
                     <PwaInstallPrompt />
                   </TipsProvider>
                 </SubscriptionProvider>
-              </SyncProvider>
             </ConfigProvider>
           </PwaProvider>
         </ThemeProvider>

@@ -57,7 +57,7 @@ export const BackupService = {
     return window.crypto.subtle.deriveKey(
       {
         name: "PBKDF2",
-        salt,
+        salt: salt as unknown as BufferSource,
         iterations: 100000,
         hash: "SHA-256",
       },
@@ -77,7 +77,7 @@ export const BackupService = {
     const encodedData = enc.encode(JSON.stringify(data))
     
     const encryptedContent = await window.crypto.subtle.encrypt(
-      { name: "AES-GCM", iv },
+      { name: "AES-GCM", iv: iv as unknown as BufferSource },
       key,
       encodedData
     )
@@ -97,9 +97,9 @@ export const BackupService = {
     const key = await BackupService.generateKeyFromPassword(password, s)
     
     const decryptedContent = await window.crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: i },
+      { name: "AES-GCM", iv: i as unknown as BufferSource },
       key,
-      e
+      e as unknown as BufferSource
     )
     
     const dec = new TextDecoder()

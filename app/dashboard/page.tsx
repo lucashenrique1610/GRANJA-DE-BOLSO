@@ -8,7 +8,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import DashboardLayout from "@/components/dashboard-layout"
 import { AlertCircle, Calendar, Egg, BarChart3, CreditCard, CloudSun, BookOpen } from "lucide-react"
-import useLocalStorage from "@/hooks/use-local-storage"
 import { formatNumber } from "@/lib/format-utils"
 import { StatCard } from "@/components/stat-card"
 import { StatusBadge } from "@/components/status-badge"
@@ -27,18 +26,18 @@ export default function DashboardPage() {
   const { config } = useConfig()
   const { isInTrial, daysLeftInTrial, subscriptionStatus } = useSubscription()
   const { toast } = useToast()
-  const [lotes] = useLocalStorage<Lote[]>("lotes", [])
-  const [manejoDia] = useLocalStorage<ManejoDia>("manejoDia", {})
-  const [selectedLote, setSelectedLote] = useState("todos")
-  const [selectedPeriodo, setSelectedPeriodo] = useState("semana")
-  const [alertas, setAlertas] = useState<string[]>([])
-  const [estoque] = useLocalStorage<Estoque>("estoque", {
+  const [lotes, setLotes] = useState<Lote[]>([])
+  const [manejoDia, setManejoDia] = useState<ManejoDia>({})
+  const [estoque, setEstoque] = useState<Estoque>({
     ovos: 0,
     galinhas_vivas: 0,
     galinhas_limpas: 0,
     cama_aves: 0,
   })
-  const [aplicacoesSaude] = useLocalStorage<AplicacaoSaude[]>("aplicacoesSaude", [])
+  const [aplicacoesSaude, setAplicacoesSaude] = useState<AplicacaoSaude[]>([])
+  const [selectedLote, setSelectedLote] = useState("todos")
+  const [selectedPeriodo, setSelectedPeriodo] = useState("semana")
+  const [alertas, setAlertas] = useState<string[]>([])
   const [climaHoje, setClimaHoje] = useState<{ max: number; min: number; chuva: number; data: string } | null>(null)
   const [loadingClima, setLoadingClima] = useState(false)
   const [erroClima, setErroClima] = useState("")
@@ -46,6 +45,7 @@ export default function DashboardPage() {
   const [tempAtual, setTempAtual] = useState<number | null>(null)
   const [descricaoAtual, setDescricaoAtual] = useState("")
   const [iconeAtual, setIconeAtual] = useState<string | undefined>(undefined)
+  const [loadingData, setLoadingData] = useState(true)
   type OWCurrent = {
     sys?: { sunrise?: number; sunset?: number }
     main?: { temp?: number; humidity?: number; feels_like?: number; pressure?: number }
@@ -54,7 +54,34 @@ export default function DashboardPage() {
     weather?: Array<{ description?: string; icon?: string }>
   }
 
-  const checkAlerts = useCallback(() => {
+  // Load data on mount
+  const loadData = useCallback(async () => {
+    try {
+      const [lotesData, manejoData, estoqueData, aplicacoesData, alertasData] = await Promise.all([
+        DataService.getLotes(),
+        DataService.getManejoDia(),
+        DataService.getEstoque(),
+        DataService.getAplicacoesSaude(),
+        DataService.getAlertas()
+      ])
+      
+      setLotes(lotesData)
+      setManejoDia(manejoData)
+      setEstoque(estoqueData)
+      setAplicacoesSaude(aplicacoesData)
+      setAlertas(alertasData)
+    } catch (error) {
+      console.error("Erro ao carregar dados do dashboard:", error)
+    } finally {
+      setLoadingData(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const checkAlerts = useCallback(async () => {
     const alerts: string[] = []
     if (isInTrial()) {
       const trialDays = daysLeftInTrial()
@@ -72,70 +99,18 @@ export default function DashboardPage() {
         alerts.push(`Sua assinatura expira em ${diffDays} dias! Renove para continuar usando o sistema.`)
       }
     }
-    if (ConfigService.shouldShowAlert("aplicacoesSaude", config)) {
-      try {
-        const aplicacoesSaudeData: AplicacaoSaude[] = JSON.parse(localStorage.getItem("aplicacoesSaude") || "[]")
-        aplicacoesSaudeData.forEach((a) => {
-          if (a.dataProxima) {
-            const dateParts = a.dataProxima.split("/")
-            const dataProxima = new Date(Number(dateParts[2]), Number(dateParts[1]) - 1, Number(dateParts[0]))
-            const today = new Date()
-            const diasRestantes = Math.ceil((dataProxima.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-            if (diasRestantes <= Number(config.sistema.diasAlertaEstoqueBaixo) && diasRestantes >= 0) {
-              alerts.push(`Próxima dose de ${a.nome} (${a.loteId}) em ${diasRestantes} dias`)
-            }
-          }
-        })
-      } catch (e) {
-        console.error("Erro ao verificar alertas de saúde:", e)
-      }
-    }
-    if (ConfigService.shouldShowAlert("alertasEstoque", config)) {
-      try {
-        const estoqueData: Estoque = JSON.parse(localStorage.getItem("estoque") || "{}")
-        if (estoqueData.ovos < Number(config.sistema.quantidadeEstoqueBaixoOvos)) {
-          alerts.push(`Estoque de ovos baixo (< ${config.sistema.quantidadeEstoqueBaixoOvos} unidades)!`)
-        }
-        if (estoqueData.galinhas_vivas < Number(config.sistema.quantidadeEstoqueBaixoAves)) {
-          alerts.push(`Estoque de galinhas vivas baixo (< ${config.sistema.quantidadeEstoqueBaixoAves})!`)
-        }
-      } catch (e) {
-        console.error("Erro ao verificar alertas de estoque:", e)
-      }
-    }
-    if (ConfigService.shouldShowAlert("lembretesManejos", config)) {
-      try {
-        const today = new Date().toLocaleDateString("pt-BR")
-        const manejoDiaData: ManejoDia = JSON.parse(localStorage.getItem("manejoDia") || "{}")
-        if (!manejoDiaData[today]?.manha) {
-          alerts.push("Manejo da manhã pendente!")
-        }
-        if (!manejoDiaData[today]?.tarde) {
-          alerts.push("Manejo da tarde pendente!")
-        }
-      } catch (e) {
-        console.error("Erro ao verificar alertas de manejo:", e)
-      }
-    }
     setAlertas(alerts)
-  }, [config, subscriptionStatus, isInTrial, daysLeftInTrial])
+  }, [subscriptionStatus, isInTrial, daysLeftInTrial])
 
   useEffect(() => {
     checkAlerts()
   }, [checkAlerts])
-
-  
-
-  
-
-  
 
   const handleManejoClick = () => {
     router.push("/dashboard/manejo")
   }
 
   const handleAlertClick = (alert: string) => {
-    // Extract information from alert and navigate to appropriate page
     if (alert.includes("período de teste") || alert.includes("assinatura expira")) {
       router.push("/assinatura")
     } else if (alert.includes("Manejo")) {
@@ -150,13 +125,11 @@ export default function DashboardPage() {
   }
 
   const getTodayManejo = () => {
-    const today = new Date().toLocaleDateString("pt-BR")
+    const today = new Date().toISOString().split('T')[0] // YYYY-MM-DD
     return manejoDia[today] || { manha: null, tarde: null }
   }
 
   const todayManejo = getTodayManejo()
-
-  
 
   const fetchOW = async (url: string) => {
     const r = await fetch(url)
@@ -172,15 +145,13 @@ export default function DashboardPage() {
   }, [])
 
   const handleBackup = useCallback(async () => {
-    const ok = await DataService.createBackup()
+    const ok = await DataService.testSupabaseConnection()
     toast({
-      title: ok ? "Backup concluído" : "Backup indisponível",
-      description: ok ? "Dados enviados ao Supabase" : "Configure Supabase para usar backup",
+      title: ok ? "Teste de conexão concluído" : "Conexão indisponível",
+      description: ok ? "Supabase está online" : "Verifique configurações do Supabase",
       variant: ok ? undefined : "destructive",
     })
   }, [toast])
-
-  
 
   const fetchClimaResumo = useCallback(async (la: string, lo: string) => {
     try {
@@ -350,6 +321,17 @@ export default function DashboardPage() {
     return tips
   }, [tempAtual, climaHoje])
 
+  if (loadingData) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          <p className="mt-4 text-muted-foreground">Carregando dados...</p>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
   return (
     <DashboardLayout>
       <div className="flex flex-col gap-6">
@@ -507,14 +489,14 @@ export default function DashboardPage() {
             {dicasContextuais.length > 0 ? (
               <div className="space-y-3">
                 {dicasContextuais.map((d, i) => (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-lg border">
-                    <div className="flex-1">
-                      <div className="font-medium">{d.title}</div>
-                      <div className="text-sm text-muted-foreground">{d.desc}</div>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => router.push(d.route)}>Ver detalhes</Button>
+                <div key={i} className="flex items-start gap-3 p-3 rounded-lg border">
+                  <div className="flex-1">
+                    <div className="font-medium">{d.title}</div>
+                    <div className="text-sm text-muted-foreground">{d.desc}</div>
                   </div>
-                ))}
+                  <Button variant="outline" size="sm" onClick={() => router.push(d.route)}>Ver detalhes</Button>
+                </div>
+              ))}
               </div>
             ) : (
               <div className="text-sm text-muted-foreground">Sem dicas no momento</div>
@@ -579,7 +561,7 @@ export default function DashboardPage() {
                 </SelectContent>
               </Select>
 
-              <Button variant="outline" onClick={handleBackup}>Backup</Button>
+              <Button variant="outline" onClick={handleBackup}>Testar Conexão</Button>
             </div>
           </div>
 
@@ -596,7 +578,7 @@ export default function DashboardPage() {
 
             <StatCard
               title="Próximas Aplicações"
-              value={aplicacoesSaude.filter((a) => a.dataProxima).length}
+              value={aplicacoesSaude.filter((a) => a.data_proxima).length}
               icon={<Calendar className="h-5 w-5 text-muted-foreground" />}
               formatter="none"
             />

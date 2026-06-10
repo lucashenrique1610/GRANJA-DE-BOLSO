@@ -1,18 +1,19 @@
 /**
  * Serviço centralizado para gerenciar dados da aplicação
- * Encapsula operações de leitura e escrita no localStorage
+ * Usa Supabase diretamente via APIs de backend
  */
-
-import { syncService } from "./sync-service"
 
 // Tipos de dados
 export interface Lote {
   id: string
   quantidade: number
   fornecedor: string
-  dataCompra: string
-  valorLote: number
-  valorAve: number
+  data_compra?: string
+  dataCompra?: string
+  valor_lote: number
+  valorLote?: number
+  valor_ave: number
+  valorAve?: number
   tipo: string
   raca: string
   femeas: number
@@ -26,24 +27,44 @@ export interface Lote {
 
 export interface VisitaVeterinaria {
   id: string
-  loteId: string
+  lote_id: string
+  loteId?: string
   data: string
-  tipoProcedimento: string
-  veterinario: string
-  observacoes: string
+  tipo_procedimento?: string
+  tipoProcedimento?: string
+  veterinario?: string
+  observacoes?: string
 }
 
 export interface Manejo {
-  status: string
-  loteId: string
+  status?: string
+  lote_id?: string
+  loteId?: string
   ovos: number
-  ovosDanificados: number
+  ovos_danificados: number
+  ovosDanificados?: number
   racao: number
   agua: number
-  porta: string
-  outros: string
-  pesoOvos: number
-  classificacao: string
+  porta?: string
+  outros?: string
+  peso_ovos: number
+  pesoOvos?: number
+  classificacao?: string
+}
+
+export interface ManejoHistorico {
+  id: string
+  lote_id?: string
+  loteId?: string
+  data: string
+  periodo: string
+  ovos: number
+  ovos_danificados: number
+  ovosDanificados?: number
+  racao: number
+  agua: number
+  peso_ovos: number
+  pesoOvos?: number
 }
 
 export interface ManejoDia {
@@ -54,6 +75,7 @@ export interface ManejoDia {
 }
 
 export interface Estoque {
+  user_id?: string
   ovos: number
   galinhas_vivas: number
   galinhas_limpas: number
@@ -63,73 +85,84 @@ export interface Estoque {
 export interface AplicacaoSaude {
   id?: string
   data: string
-  loteId: string
-  fase: string
-  tipo: string
-  nome: string
-  veterinario: string
+  lote_id?: string
+  loteId?: string
+  fase?: string
+  tipo?: string
+  nome?: string
+  veterinario?: string
   quantidade: number
-  observacoes: string
-  proximaDose: string
-  dataProxima: string
-  formulacaoId: string | null
+  observacoes?: string
+  proxima_dose?: string
+  proximaDose?: string
+  data_proxima?: string
+  dataProxima?: string
+  formulacao_id?: string | null
+  formulacaoId?: string | null
 }
 
 export interface Mortalidade {
   id?: string
   data: string
-  loteId: string
+  lote_id?: string
+  loteId?: string
   quantidade: number
-  causa: string
-  observacoes: string
+  causa?: string
+  observacoes?: string
 }
 
 export interface Cliente {
   id: string
   nome: string
-  endereco: string
-  telefone: string
+  endereco?: string
+  telefone?: string
+  cpf_cnpj?: string
   cpfCnpj?: string
-  tipo: "fisico" | "juridico"
+  tipo: 'fisico' | 'juridico'
 }
 
 export interface Fornecedor {
   id: string
   nome: string
+  cpf_cnpj?: string
   cpfCnpj?: string
-  telefone: string
-  endereco: string
-  produtos: string
+  telefone?: string
+  endereco?: string
+  produtos?: string
 }
 
 export interface Venda {
   id?: string
   data: string
-  cliente: string
+  cliente_id?: string
+  clienteId?: string
+  cliente_nome?: string
+  cliente?: string
   produto: string
   quantidade: number
   pagamento: string
   valor: number
-  loteId: string
+  lote_id?: string
+  loteId?: string
 }
 
 export interface Compra {
   id?: string
   data: string
-  fornecedor: string
-  tipo: string
+  fornecedor_id?: string
+  fornecedorId?: string
+  fornecedor_nome?: string
+  fornecedor?: string
+  tipo?: string
   quantidade: number
   valor: number
-  descricao: string
-  categoria: string
+  descricao?: string
+  categoria?: string
 }
-
-// Dicas: tipos e armazenamento
-export type TipAction = "view" | "ignore" | "irrelevant" | "related"
 
 export interface TipFeedback {
   id: string
-  action: TipAction
+  action: string
   ts: number
   path: string
 }
@@ -137,454 +170,335 @@ export interface TipFeedback {
 export interface TipPreferences {
   dismissed: string[]
   irrelevant: string[]
-  lastShown: Record<string, number>
+  last_shown?: Record<string, number>
+  lastShown?: Record<string, number>
 }
 
 export interface AuditLog {
   id: string
   timestamp: string
-  action: "create" | "update" | "delete"
-  entity: "lote" | "mortalidade" | "manejo" | "saude" | "aplicacao" | "visita"
-  entityId: string
+  action: string
+  entity: string
+  entity_id: string
   details: string
   user: string
 }
 
-// Funções auxiliares
-function getItem<T>(key: string, defaultValue: T): T {
-  try {
-    if (typeof window === "undefined") {
-      return defaultValue
-    }
-    const item = window.localStorage.getItem(key)
-    return item ? JSON.parse(item) : defaultValue
-  } catch (error) {
-    console.error(`Error reading localStorage key "${key}":`, error)
-    return defaultValue
-  }
-}
-
-function setItem<T>(key: string, value: T): void {
-  try {
-    if (typeof window === "undefined") {
-      return
-    }
-    window.localStorage.setItem(key, JSON.stringify(value))
-  } catch (error) {
-    console.error(`Error setting localStorage key "${key}":`, error)
-  }
-}
-
+// Função auxiliar para obter token de sessão
 function getSessionToken(): string | null {
   if (typeof window === "undefined") return null
   const storedSession = localStorage.getItem("granja_session")
   if (storedSession) {
-      try {
-          const session = JSON.parse(storedSession)
-          return session.access_token || null
-      } catch {}
+    try {
+      const session = JSON.parse(storedSession)
+      return session.access_token || null
+    } catch {}
   }
   return null
 }
 
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
+// Função auxiliar para requisições à API
+async function apiRequest(
+  endpoint: string, 
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', 
+  body?: any
+): Promise<any> {
+  const token = getSessionToken()
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
 
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3, baseDelay = 300): Promise<T> {
-  let lastError: any
-  for (let i = 0; i < attempts; i++) {
-    try {
-      return await fn()
-    } catch (e) {
-      lastError = e
-      if (i < attempts - 1) {
-        await delay(baseDelay * Math.pow(2, i))
-      }
+  const config: RequestInit = {
+    method,
+    headers
+  }
+
+  if (body && method !== 'GET') {
+    config.body = JSON.stringify(body)
+  }
+
+  try {
+    const res = await fetch(`/api/${endpoint}`, config)
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}))
+      throw new Error(errorData.error || `Erro na requisição: ${res.status}`)
     }
-  }
-  throw lastError
-}
-
-async function upsertClienteSupabase(cliente: Cliente): Promise<boolean> {
-  const token = getSessionToken()
-  if (!token) return false
-  
-  try {
-      const ok = await withRetry(async () => {
-        const res = await fetch("/api/clientes", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${token}`
-            },
-            body: JSON.stringify({
-              id: cliente.id,
-              nome: cliente.nome,
-              endereco: cliente.endereco,
-              telefone: cliente.telefone,
-              cpf_cnpj: cliente.cpfCnpj,
-              tipo: cliente.tipo
-            })
-        })
-        if (!res.ok) throw new Error("failed")
-        return true
-      })
-      return ok
-  } catch {
-      return false
+    return await res.json()
+  } catch (error) {
+    console.error(`[API Request] Error on ${endpoint}:`, error)
+    throw error
   }
 }
-
-async function fetchClientesSupabase(): Promise<Cliente[]> {
-  const token = getSessionToken()
-  if (!token) return []
-  
-  try {
-      const arr = await withRetry(async () => {
-        const res = await fetch("/api/clientes", {
-            headers: { "Authorization": `Bearer ${token}` }
-        })
-        if (!res.ok) throw new Error("failed")
-        return await res.json()
-      })
-      
-      if (Array.isArray(arr)) {
-        return arr.map((c: any) => ({
-          id: c.id || crypto.randomUUID(), // Ensure ID exists
-          nome: c.nome,
-          endereco: c.endereco,
-          telefone: c.telefone,
-          cpfCnpj: c.cpf_cnpj || c.cpfCnpj || undefined,
-          tipo: c.tipo
-        }))
-      }
-      return []
-  } catch {
-      return []
-  }
-}
-
 
 // Funções de acesso aos dados
 export const DataService = {
   // Lotes
-  getLotes: (): Lote[] => getItem<Lote[]>("lotes", []),
-  saveLote: (lote: Lote) => {
-    const lotes = DataService.getLotes()
-    const index = lotes.findIndex((l) => l.id === lote.id)
-    let action: "create" | "update" = "create"
-
-    if (index >= 0) {
-      lotes[index] = lote
-      action = "update"
-    } else {
-      lotes.push(lote)
-    }
-
-    setItem("lotes", lotes)
-    syncService.enqueue(action, "lotes", lote, lote.id)
+  async getLotes(): Promise<Lote[]> {
+    return await apiRequest('lotes')
+  },
+  
+  async saveLote(lote: Lote): Promise<Lote> {
+    await apiRequest('lotes', 'POST', lote)
     return lote
   },
-  // Função implementada para uso futuro
-  deleteLote: (id: string) => {
-    const lotes = DataService.getLotes().filter((l) => l.id !== id)
-    setItem("lotes", lotes)
-    syncService.enqueue("delete", "lotes", {}, id)
+
+  async deleteLote(id: string): Promise<void> {
+    await apiRequest(`lotes/${id}`, 'DELETE')
   },
 
   // Visitas Veterinárias
-  getVisitas: (): VisitaVeterinaria[] => getItem<VisitaVeterinaria[]>("visitasVeterinarias", []),
-  saveVisita: (visita: VisitaVeterinaria) => {
-    const visitas = DataService.getVisitas()
-    if (!visita.id) visita.id = crypto.randomUUID()
-    
-    visitas.push(visita)
-    setItem("visitasVeterinarias", visitas)
-    syncService.enqueue("create", "visitas_veterinarias", visita, visita.id)
+  async getVisitas(): Promise<VisitaVeterinaria[]> {
+    return await apiRequest('visitas-veterinarias')
+  },
+  
+  async saveVisita(visita: VisitaVeterinaria): Promise<VisitaVeterinaria> {
+    await apiRequest('visitas-veterinarias', 'POST', visita)
     return visita
   },
 
   // Manejo
-  getManejoDia: (): ManejoDia => getItem<ManejoDia>("manejoDia", {}),
-  // Função implementada para uso futuro
-  saveManejo: (data: string, periodo: "manha" | "tarde", manejo: Manejo) => {
-    const manejoDia = DataService.getManejoDia()
-
-    if (!manejoDia[data]) {
-      manejoDia[data] = {}
-    }
-
-    manejoDia[data][periodo] = manejo
-
-    // Atualizar estoque de ovos
-    const estoque = DataService.getEstoque()
-    estoque.ovos = (estoque.ovos || 0) + manejo.ovos - (manejo.ovosDanificados || 0)
-    DataService.saveEstoque(estoque)
-
-    setItem("manejoDia", manejoDia)
-
-    // Prepare for sync
-    const flatManejo = {
-        data,
-        periodo,
-        ...manejo
-    }
-    // Use composite key logic in SyncService or just pass a deterministic ID if possible. 
-    // We will use "upsert" with the data.
-    syncService.enqueue("upsert", "manejo_diario", flatManejo, `${data}_${periodo}_${manejo.loteId}`)
-
+  async getManejoDia(): Promise<ManejoDia> {
+    const manejoData = await apiRequest('manejo-diario')
+    const manejoDia: ManejoDia = {}
+    
+    manejoData.forEach((item: any) => {
+      if (!manejoDia[item.data]) {
+        manejoDia[item.data] = {}
+      }
+      manejoDia[item.data][item.periodo] = {
+        status: item.status,
+        lote_id: item.lote_id,
+        ovos: item.ovos,
+        ovos_danificados: item.ovos_danificados,
+        racao: item.racao,
+        agua: item.agua,
+        porta: item.porta,
+        outros: item.outros,
+        peso_ovos: item.peso_ovos,
+        classificacao: item.classificacao
+      }
+    })
+    
     return manejoDia
   },
 
+  async saveManejo(data: string, periodo: 'manha' | 'tarde', manejo: Manejo): Promise<ManejoDia> {
+    await apiRequest('manejo-diario', 'POST', {
+      data,
+      periodo,
+      ...manejo
+    })
+    
+    const estoque = await DataService.getEstoque()
+    const novoOvos = estoque.ovos + manejo.ovos - (manejo.ovos_danificados || 0)
+    await DataService.saveEstoque({ ...estoque, ovos: novoOvos })
+    
+    return DataService.getManejoDia()
+  },
+
   // Estoque
-  getEstoque: (): Estoque =>
-    getItem<Estoque>("estoque", {
-      ovos: 0,
-      galinhas_vivas: 0,
-      galinhas_limpas: 0,
-      cama_aves: 0,
-    }),
-  saveEstoque: (estoque: Estoque) => {
-    setItem("estoque", estoque)
-    syncService.enqueue("upsert", "estoque", estoque, "singleton")
+  async getEstoque(): Promise<Estoque> {
+    return await apiRequest('estoque')
+  },
+  
+  async saveEstoque(estoque: Estoque): Promise<Estoque> {
+    await apiRequest('estoque', 'POST', estoque)
     return estoque
   },
 
   // Aplicações de Saúde
-  getAplicacoesSaude: (): AplicacaoSaude[] => getItem<AplicacaoSaude[]>("aplicacoesSaude", []),
-  saveAplicacaoSaude: (aplicacao: AplicacaoSaude) => {
-    const aplicacoes = DataService.getAplicacoesSaude()
-    if (!aplicacao.id) aplicacao.id = crypto.randomUUID()
-    
-    aplicacoes.push(aplicacao)
-    setItem("aplicacoesSaude", aplicacoes)
-    syncService.enqueue("create", "aplicacoes_saude", aplicacao, aplicacao.id)
+  async getAplicacoesSaude(): Promise<AplicacaoSaude[]> {
+    return await apiRequest('aplicacoes-saude')
+  },
+  
+  async saveAplicacaoSaude(aplicacao: AplicacaoSaude): Promise<AplicacaoSaude> {
+    await apiRequest('aplicacoes-saude', 'POST', aplicacao)
     return aplicacao
   },
 
   // Mortalidade
-  getMortalidade: (): Mortalidade[] => getItem<Mortalidade[]>("mortalidade", []),
-  saveMortalidade: (mortalidade: Mortalidade) => {
-    const registros = DataService.getMortalidade()
-    if (!mortalidade.id) mortalidade.id = crypto.randomUUID()
-
-    // Atualizar estoque de aves
-    const estoque = DataService.getEstoque()
-    estoque.galinhas_vivas = Math.max(0, estoque.galinhas_vivas - mortalidade.quantidade)
-    DataService.saveEstoque(estoque)
-
-    registros.push(mortalidade)
-    setItem("mortalidade", registros)
-    syncService.enqueue("create", "mortalidade", mortalidade, mortalidade.id)
+  async getMortalidade(): Promise<Mortalidade[]> {
+    return await apiRequest('mortalidade')
+  },
+  
+  async saveMortalidade(mortalidade: Mortalidade): Promise<Mortalidade> {
+    await apiRequest('mortalidade', 'POST', mortalidade)
+    
+    const estoque = await DataService.getEstoque()
+    const novoGalinhasVivas = Math.max(0, estoque.galinhas_vivas - mortalidade.quantidade)
+    await DataService.saveEstoque({ ...estoque, galinhas_vivas: novoGalinhasVivas })
+    
     return mortalidade
   },
 
   // Clientes
-  getClientes: (): Cliente[] => getItem<Cliente[]>("clientes", []),
-  saveCliente: (cliente: Cliente) => {
-    const clientes = DataService.getClientes()
-    
-    // Ensure ID
-    if (!cliente.id) {
-      cliente.id = crypto.randomUUID()
-    }
-
-    const index = clientes.findIndex((c) => c.id === cliente.id)
-
-    if (index >= 0) {
-      clientes[index] = cliente
-    } else {
-      clientes.push(cliente)
-    }
-
-    setItem("clientes", clientes)
-    syncService.enqueue("upsert", "clientes", cliente, cliente.id)
+  async getClientes(): Promise<Cliente[]> {
+    return await apiRequest('clientes')
+  },
+  
+  async saveCliente(cliente: Cliente): Promise<Cliente> {
+    await apiRequest('clientes', 'POST', cliente)
     return cliente
   },
 
   // Fornecedores
-  getFornecedores: (): Fornecedor[] => getItem<Fornecedor[]>("fornecedores", []),
-  saveFornecedor: (fornecedor: Fornecedor) => {
-    const fornecedores = DataService.getFornecedores()
-    
-    // Ensure ID
-    if (!fornecedor.id) {
-      fornecedor.id = crypto.randomUUID()
-    }
-
-    const index = fornecedores.findIndex((f) => f.id === fornecedor.id)
-
-    if (index >= 0) {
-      fornecedores[index] = fornecedor
-    } else {
-      fornecedores.push(fornecedor)
-    }
-
-    setItem("fornecedores", fornecedores)
-    syncService.enqueue("upsert", "fornecedores", fornecedor, fornecedor.id)
+  async getFornecedores(): Promise<Fornecedor[]> {
+    return await apiRequest('fornecedores')
+  },
+  
+  async saveFornecedor(fornecedor: Fornecedor): Promise<Fornecedor> {
+    await apiRequest('fornecedores', 'POST', fornecedor)
     return fornecedor
   },
 
-  // Backup Stub (Compatibility)
-  createBackup: async (): Promise<boolean> => {
-    console.warn("DataService.createBackup is deprecated. Use BackupService instead.")
-    return false
-  },
-
-  
-  loadClientesFromSupabase: async (): Promise<Cliente[]> => {
-    const arr = await fetchClientesSupabase()
-    if (arr.length) {
-      setItem("clientes", arr)
-    }
-    return arr
-  },
-
-  testSupabaseConnection: async (): Promise<{ ok: boolean; error?: string }> => {
-    try {
-        const res = await fetch("/api/status/supabase")
-        const data = await res.json()
-        if (data.ok) return { ok: true }
-        return { ok: false, error: data.error || "Erro de conexão" }
-    } catch (e: any) {
-        return { ok: false, error: e.message }
-    }
-  },
-
   // Vendas
-  getVendas: (): Venda[] => getItem<Venda[]>("vendas", []),
-  saveVenda: (venda: Venda) => {
-    const vendas = DataService.getVendas()
-    if (!venda.id) venda.id = crypto.randomUUID()
-
-    // Atualizar estoque
-    const estoque = DataService.getEstoque()
-    if (estoque[venda.produto as keyof Estoque] !== undefined) {
-      estoque[venda.produto as keyof Estoque] = Math.max(
-        0,
-        (estoque[venda.produto as keyof Estoque] as number) - venda.quantidade,
-      )
-      DataService.saveEstoque(estoque)
+  async getVendas(): Promise<Venda[]> {
+    return await apiRequest('vendas')
+  },
+  
+  async saveVenda(venda: Venda): Promise<Venda> {
+    await apiRequest('vendas', 'POST', venda)
+    
+    const estoque = await DataService.getEstoque()
+    if (venda.produto === 'ovos') {
+      await DataService.saveEstoque({
+        ...estoque,
+        ovos: Math.max(0, estoque.ovos - venda.quantidade)
+      })
     }
-
-    vendas.push(venda)
-    setItem("vendas", vendas)
-    syncService.enqueue("create", "vendas", venda, venda.id)
+    
     return venda
   },
 
   // Compras
-  getCompras: (): Compra[] => getItem<Compra[]>("compras", []),
-  saveCompra: (compra: Compra) => {
-    const compras = DataService.getCompras()
-    if (!compra.id) compra.id = crypto.randomUUID()
-
-    compras.push(compra)
-    setItem("compras", compras)
-    syncService.enqueue("create", "compras", compra, compra.id)
+  async getCompras(): Promise<Compra[]> {
+    return await apiRequest('compras')
+  },
+  
+  async saveCompra(compra: Compra): Promise<Compra> {
+    await apiRequest('compras', 'POST', compra)
     return compra
   },
 
   // Alertas
-  getAlertas: (): string[] => {
+  async getAlertas(): Promise<string[]> {
     const alertas: string[] = []
+    const hoje = new Date().toISOString().split('T')[0]
 
-    // Verificar aplicações de saúde
-    const aplicacoes = DataService.getAplicacoesSaude()
+    const aplicacoes = await DataService.getAplicacoesSaude()
     aplicacoes.forEach((a) => {
-      if (a.dataProxima) {
-        const dateParts = a.dataProxima.split("/")
-        const dataProxima = new Date(
-          Number.parseInt(dateParts[2]),
-          Number.parseInt(dateParts[1]) - 1,
-          Number.parseInt(dateParts[0]),
-        )
-        const today = new Date()
-        const diasRestantes = Math.ceil((dataProxima.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-
-        if (diasRestantes <= 7 && diasRestantes >= 0) {
-          alertas.push(`Próxima dose de ${a.nome} (${a.loteId}) em ${diasRestantes} dias`)
+      if (a.data_proxima) {
+        const dataProxima = new Date(a.data_proxima)
+        const diffDays = Math.ceil((dataProxima.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
+        if (diffDays <= 7 && diffDays >= 0) {
+          alertas.push(`Próxima dose de ${a.nome} (Lote ${a.lote_id}) em ${diffDays} dias`)
         }
       }
     })
 
-    // Verificar estoque
-    const estoque = DataService.getEstoque()
-    if (estoque.ovos < 50) {
-      alertas.push("Estoque de ovos baixo (< 50 unidades)!")
-    }
-    if (estoque.galinhas_vivas < 10) {
-      alertas.push("Estoque de galinhas vivas baixo (< 10)!")
-    }
+    const estoque = await DataService.getEstoque()
+    if (estoque.ovos < 50) alertas.push('Estoque de ovos baixo (< 50 unidades)!')
+    if (estoque.galinhas_vivas < 10) alertas.push('Estoque de galinhas vivas baixo (< 10)!')
 
-    // Verificar manejo diário
-    const today = new Date().toLocaleDateString("pt-BR")
-    const manejoDia = DataService.getManejoDia()
-
-    if (!manejoDia[today]?.manha) {
-      alertas.push("Manejo da manhã pendente!")
-    }
-    if (!manejoDia[today]?.tarde) {
-      alertas.push("Manejo da tarde pendente!")
-    }
+    const manejoDia = await DataService.getManejoDia()
+    if (!manejoDia[hoje]?.manha) alertas.push('Manejo da manhã pendente!')
+    if (!manejoDia[hoje]?.tarde) alertas.push('Manejo da tarde pendente!')
 
     return alertas
   },
 
-  // Dicas: feedback e preferências
-  getTipFeedbacks: (): TipFeedback[] => getItem<TipFeedback[]>("tipFeedbacks", []),
-  saveTipFeedback: (fb: TipFeedback) => {
+  // Dicas: feedback e preferências (ainda usando localStorage por enquanto)
+  getTipFeedbacks(): TipFeedback[] {
+    try {
+      if (typeof window === "undefined") return []
+      const item = window.localStorage.getItem("tip_feedbacks")
+      return item ? JSON.parse(item) : []
+    } catch { return [] }
+  },
+  
+  saveTipFeedback(fb: TipFeedback): TipFeedback {
+    if (typeof window === "undefined") return fb
     const list = DataService.getTipFeedbacks()
     list.push(fb)
-    setItem("tipFeedbacks", list)
+    window.localStorage.setItem("tip_feedbacks", JSON.stringify(list))
     return fb
   },
-  getTipPreferences: (): TipPreferences =>
-    getItem<TipPreferences>("tipPreferences", { dismissed: [], irrelevant: [], lastShown: {} }),
-  saveTipPreferences: (prefs: TipPreferences) => {
-    setItem("tipPreferences", prefs)
+  
+  getTipPreferences(): TipPreferences {
+    try {
+      if (typeof window === "undefined") return { dismissed: [], irrelevant: [], last_shown: {} }
+      const item = window.localStorage.getItem("tip_preferences")
+      return item ? JSON.parse(item) : { dismissed: [], irrelevant: [], last_shown: {} }
+    } catch { return { dismissed: [], irrelevant: [], last_shown: {} } }
+  },
+  
+  saveTipPreferences(prefs: TipPreferences): TipPreferences {
+    if (typeof window === "undefined") return prefs
+    window.localStorage.setItem("tip_preferences", JSON.stringify(prefs))
     return prefs
   },
-  dismissTipTemporarily: (id: string) => {
+  
+  dismissTipTemporarily(id: string): void {
     const prefs = DataService.getTipPreferences()
     if (!prefs.dismissed.includes(id)) {
       prefs.dismissed.push(id)
     }
     DataService.saveTipPreferences(prefs)
   },
-
-  // Audit Logs
-  getAuditLogs: (): AuditLog[] => getItem<AuditLog[]>("auditLogs", []),
-  saveAuditLog: (log: AuditLog) => {
-    const logs = DataService.getAuditLogs()
-    logs.push(log)
-    setItem("auditLogs", logs)
-    return log
-  },
-  markTipIrrelevant: (id: string) => {
+  
+  markTipIrrelevant(id: string): void {
     const prefs = DataService.getTipPreferences()
     if (!prefs.irrelevant.includes(id)) {
       prefs.irrelevant.push(id)
     }
     DataService.saveTipPreferences(prefs)
   },
-  setTipLastShown: (id: string, ts: number) => {
+  
+  setTipLastShown(id: string, ts: number): void {
     const prefs = DataService.getTipPreferences()
-    prefs.lastShown[id] = ts
+    if (prefs.last_shown) {
+      prefs.last_shown[id] = ts
+    }
     DataService.saveTipPreferences(prefs)
   },
 
-  forceSync: async () => {
-    await syncService.processQueue()
-    await syncService.pullUpdates()
+  // Audit Logs (local por enquanto)
+  getAuditLogs(): AuditLog[] {
+    try {
+      if (typeof window === "undefined") return []
+      const item = window.localStorage.getItem("audit_logs")
+      return item ? JSON.parse(item) : []
+    } catch { return [] }
+  },
+  
+  saveAuditLog(log: AuditLog): AuditLog {
+    if (typeof window === "undefined") return log
+    const logs = DataService.getAuditLogs()
+    logs.push(log)
+    window.localStorage.setItem("audit_logs", JSON.stringify(logs))
+    return log
   },
 
-  getSyncStatus: () => {
-    return {
-      pendingItems: syncService.getQueueLength(),
-      lastSync: syncService.getLastSyncTime()
+  async loadClientesFromSupabase(): Promise<Cliente[]> {
+    return DataService.getClientes()
+  },
+
+  async testSupabaseConnection(): Promise<{ ok: boolean; error?: string }> {
+    try {
+      await apiRequest('status/supabase')
+      return { ok: true }
+    } catch (e: any) {
+      return { ok: false, error: e.message }
     }
   },
-}
 
+  async forceSync(): Promise<void> {
+    console.log('Sync service is disabled - using direct API calls')
+  },
+
+  getSyncStatus() {
+    return { pendingItems: 0, lastSync: null }
+  }
+}

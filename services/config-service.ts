@@ -27,10 +27,6 @@ export const defaultConfig: SystemConfig = {
     provedor: "open-meteo",
     apiKey: "",
   },
-  supabase: {
-    url: "",
-    anonKey: "",
-  },
 }
 
 // Funções para formatar valores de acordo com as configurações
