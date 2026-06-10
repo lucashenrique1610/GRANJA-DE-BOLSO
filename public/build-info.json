@@ -1,7 +1,7 @@
 {
   "version": "0.1.0",
-  "commitHash": "d8ac3ba4e532ca3caa051756958ac668c112edc6",
-  "commitMessage": "Corrige configuração do Supabase e mantém funcionalidade de trial",
-  "timestamp": "2026-06-10T22:42:40.756Z",
+  "commitHash": "0b9303eacecd312fdc1e48d5d02d322006f283ec",
+  "commitMessage": "Fix clientes API route to accept both cpfCnpj and cpf_cnpj",
+  "timestamp": "2026-06-10T23:28:11.996Z",
   "environment": "development"
 }

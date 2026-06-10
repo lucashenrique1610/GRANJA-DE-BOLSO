@@ -55,3 +55,35 @@ export async function PUT(
     return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const id = params.id
+    
+    // 1. Verificar Isolamento e Autorização
+    const access = await verifyResourceAccess(request, "lotes", id)
+    if (access.status !== "granted") {
+        return handleAccessError(access)
+    }
+
+    // 2. Executar Delete
+    const { error } = await supabaseAdmin
+      .from("lotes")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", access.user.id)
+
+    if (error) {
+      console.error("Erro ao deletar lote no Supabase:", error)
+      return NextResponse.json({ error: "Erro ao deletar do banco de dados" }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Erro interno:", error)
+    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+  }
+}
