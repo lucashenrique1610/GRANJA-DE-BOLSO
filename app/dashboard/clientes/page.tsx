@@ -12,7 +12,6 @@ import DashboardLayout from "@/components/dashboard-layout"
 import { Users, User, Building2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { DataTable } from "@/components/data-table"
-import useLocalStorage from "@/hooks/use-local-storage"
 import { formatPhone, formatCPF, formatCNPJ } from "@/lib/format-utils"
 import { DataService, type Cliente } from "@/services/data-service"
 import { useTips } from "@/contexts/tips-context"
@@ -21,8 +20,8 @@ export default function ClientesPage() {
   const { toast } = useToast()
   const { recordAction } = useTips()
   const [activeTab, setActiveTab] = useState("fisico")
-  // Usar tipagem específica em vez de any[]
-  const [clientes, setClientes] = useLocalStorage<Cliente[]>("clientes", [])
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [loading, setLoading] = useState(true)
   const [formFisico, setFormFisico] = useState({
     nome: "",
     endereco: "",
@@ -37,13 +36,22 @@ export default function ClientesPage() {
   })
   useEffect(() => {
     const load = async () => {
-      const fromCloud = await DataService.loadClientesFromSupabase()
-      if (fromCloud.length) {
-        setClientes(fromCloud)
+      try {
+        const data = await DataService.getClientes()
+        setClientes(data)
+      } catch (error) {
+        console.error("Erro ao carregar clientes:", error)
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar a lista de clientes!",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
       }
     }
-    setTimeout(load, 0)
-  }, [setClientes])
+    load()
+  }, [toast])
 
   const handleFisicoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
@@ -74,7 +82,7 @@ export default function ClientesPage() {
     }
   }
 
-  const cadastrarClienteFisico = () => {
+  const cadastrarClienteFisico = async () => {
     const { nome, endereco, whatsapp, cpf } = formFisico
 
     if (!nome || !endereco || !whatsapp) {
@@ -95,37 +103,41 @@ export default function ClientesPage() {
       return
     }
 
-    // Create new client
-    const newCliente: Cliente = {
-      id: crypto.randomUUID(),
-      nome,
-      endereco,
-      telefone: whatsapp,
-      cpfCnpj: cpf,
-      tipo: "fisico",
+    try {
+      const newCliente: Cliente = {
+        id: crypto.randomUUID(),
+        nome,
+        endereco,
+        telefone: whatsapp,
+        cpfCnpj: cpf,
+        tipo: "fisico",
+      }
+      await DataService.saveCliente(newCliente)
+      setClientes([...clientes, newCliente])
+
+      toast({
+        title: "Sucesso",
+        description: "Cliente físico cadastrado com sucesso!",
+      })
+      recordAction("cadastrar_cliente", { tipo: "fisico" })
+
+      setFormFisico({
+        nome: "",
+        endereco: "",
+        whatsapp: "",
+        cpf: "",
+      })
+    } catch (error) {
+      console.error("Erro ao salvar cliente:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar o cliente!",
+        variant: "destructive",
+      })
     }
-
-    // Usar o DataService para salvar
-    DataService.saveCliente(newCliente)
-    setClientes([...clientes, newCliente])
-
-    toast({
-      title: "Sucesso",
-      description: "Cliente físico cadastrado com sucesso!",
-    })
-
-    recordAction("cadastrar_cliente", { tipo: "fisico" })
-
-    // Reset form
-    setFormFisico({
-      nome: "",
-      endereco: "",
-      whatsapp: "",
-      cpf: "",
-    })
   }
 
-  const cadastrarClienteJuridico = () => {
+  const cadastrarClienteJuridico = async () => {
     const { nome, endereco, telefone, cnpj } = formJuridico
 
     if (!nome || !endereco || !telefone) {
@@ -146,34 +158,56 @@ export default function ClientesPage() {
       return
     }
 
-    // Create new client
-    const newCliente: Cliente = {
-      id: crypto.randomUUID(),
-      nome,
-      endereco,
-      telefone,
-      cpfCnpj: cnpj,
-      tipo: "juridico",
+    try {
+      const newCliente: Cliente = {
+        id: crypto.randomUUID(),
+        nome,
+        endereco,
+        telefone,
+        cpfCnpj: cnpj,
+        tipo: "juridico",
+      }
+      await DataService.saveCliente(newCliente)
+      setClientes([...clientes, newCliente])
+
+      toast({
+        title: "Sucesso",
+        description: "Cliente jurídico cadastrado com sucesso!",
+      })
+      recordAction("cadastrar_cliente", { tipo: "juridico" })
+
+      setFormJuridico({
+        nome: "",
+        endereco: "",
+        telefone: "",
+        cnpj: "",
+      })
+    } catch (error) {
+      console.error("Erro ao salvar cliente:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar o cliente!",
+        variant: "destructive",
+      })
     }
+  }
 
-    // Usar o DataService para salvar
-    DataService.saveCliente(newCliente)
-    setClientes([...clientes, newCliente])
-
-    toast({
-      title: "Sucesso",
-      description: "Cliente jurídico cadastrado com sucesso!",
-    })
-
-    recordAction("cadastrar_cliente", { tipo: "juridico" })
-
-    // Reset form
-    setFormJuridico({
-      nome: "",
-      endereco: "",
-      telefone: "",
-      cnpj: "",
-    })
+  const deletarCliente = async (id: string) => {
+    try {
+      await DataService.deleteCliente(id)
+      setClientes(clientes.filter((c) => c.id !== id))
+      toast({
+        title: "Sucesso",
+        description: "Cliente deletado com sucesso!",
+      })
+    } catch (error) {
+      console.error("Erro ao deletar cliente:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível deletar o cliente!",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -347,8 +381,20 @@ export default function ClientesPage() {
                   accessor: "endereco",
                   className: "max-w-[200px] truncate",
                 },
+                {
+                  header: "Ações",
+                  accessor: (cliente) => (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => deletarCliente(cliente.id)}
+                    >
+                      Deletar
+                    </Button>
+                  ),
+                },
               ]}
-              emptyMessage="Nenhum cliente cadastrado"
+              emptyMessage={loading ? "Carregando..." : "Nenhum cliente cadastrado"}
             />
           </CardContent>
         </Card>
