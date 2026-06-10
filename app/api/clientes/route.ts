@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { id, nome, endereco, telefone, cpf_cnpj, tipo } = body
+    const { id, nome, endereco, telefone, cpf_cnpj, cpfCnpj, tipo } = body
 
     // Se ID fornecido, verificar isolamento antes do Upsert
     if (id) {
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
         nome,
         endereco,
         telefone,
-        cpf_cnpj: cpf_cnpj || null,
+        cpf_cnpj: cpf_cnpj || cpfCnpj || null,
         tipo,
         updated_at: new Date().toISOString()
       }, { onConflict: "id" })
