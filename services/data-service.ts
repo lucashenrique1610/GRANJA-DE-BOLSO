@@ -258,6 +258,10 @@ export const DataService = {
     return visita
   },
 
+  async deleteVisita(id: string): Promise<void> {
+    return apiRequest(`visitas-veterinarias/${id}`, 'DELETE')
+  },
+
   // Manejo
   async getManejoDia(): Promise<ManejoDia> {
     const manejoData = await apiRequest('manejo-diario')
@@ -298,6 +302,10 @@ export const DataService = {
     return DataService.getManejoDia()
   },
 
+  async deleteManejo(id: string): Promise<void> {
+    return apiRequest(`manejo-diario/${id}`, 'DELETE')
+  },
+
   // Estoque
   async getEstoque(): Promise<Estoque> {
     return await apiRequest('estoque')
@@ -318,6 +326,10 @@ export const DataService = {
     return aplicacao
   },
 
+  async deleteAplicacaoSaude(id: string): Promise<void> {
+    return apiRequest(`aplicacoes-saude/${id}`, 'DELETE')
+  },
+
   // Mortalidade
   async getMortalidade(): Promise<Mortalidade[]> {
     return await apiRequest('mortalidade')
@@ -333,6 +345,10 @@ export const DataService = {
     return mortalidade
   },
 
+  async deleteMortalidade(id: string): Promise<void> {
+    return apiRequest(`mortalidade/${id}`, 'DELETE')
+  },
+
   // Clientes
   async getClientes(): Promise<Cliente[]> {
     return await apiRequest('clientes')
@@ -343,6 +359,10 @@ export const DataService = {
     return cliente
   },
 
+  async deleteCliente(id: string): Promise<void> {
+    return apiRequest(`clientes/${id}`, 'DELETE')
+  },
+
   // Fornecedores
   async getFornecedores(): Promise<Fornecedor[]> {
     return await apiRequest('fornecedores')
@@ -351,6 +371,10 @@ export const DataService = {
   async saveFornecedor(fornecedor: Fornecedor): Promise<Fornecedor> {
     await apiRequest('fornecedores', 'POST', fornecedor)
     return fornecedor
+  },
+
+  async deleteFornecedor(id: string): Promise<void> {
+    return apiRequest(`fornecedores/${id}`, 'DELETE')
   },
 
   // Vendas
@@ -372,6 +396,10 @@ export const DataService = {
     return venda
   },
 
+  async deleteVenda(id: string): Promise<void> {
+    return apiRequest(`vendas/${id}`, 'DELETE')
+  },
+
   // Compras
   async getCompras(): Promise<Compra[]> {
     return await apiRequest('compras')
@@ -380,6 +408,10 @@ export const DataService = {
   async saveCompra(compra: Compra): Promise<Compra> {
     await apiRequest('compras', 'POST', compra)
     return compra
+  },
+
+  async deleteCompra(id: string): Promise<void> {
+    return apiRequest(`compras/${id}`, 'DELETE')
   },
 
   // Alertas
