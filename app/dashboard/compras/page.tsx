@@ -17,7 +17,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { useTips } from "@/contexts/tips-context"
 
 import { useRouter } from "next/navigation"
-import type { Fornecedor, Compra } from "@/services/data-service"
+import { DataService, type Fornecedor, type Compra, type Ingrediente } from "@/services/data-service"
 
 /*
 interface EstoqueIngredientes {
@@ -40,18 +40,8 @@ export default function ComprasPage() {
   const [activeTab, setActiveTab] = useState("racao")
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [compras, setCompras] = useState<Compra[]>([])
-  // const [estoqueIngredientes, setEstoqueIngredientes] = useState<EstoqueIngredientes>({
-  //   milho: 0,
-  //   soja: 0,
-  //   fuba_fino: 0,
-  //   fuba_grosso: 0,
-  //   trigo: 0,
-  //   calcario_calcitico: 0,
-  //   nucleo_inicial: 0,
-  //   nucleo_crescimento: 0,
-  //   nucleo_postura: 0,
-  // })
-  const [ingredientesDisponiveis, setIngredientesDisponiveis] = useState<any[]>([])
+  const [ingredientesDisponiveis, setIngredientesDisponiveis] = useState<Ingrediente[]>([])
+  const [loading, setLoading] = useState(true)
   const [formRacao, setFormRacao] = useState({
     data: new Date().toLocaleDateString("pt-BR"),
     tipo: "",
@@ -77,35 +67,43 @@ export default function ComprasPage() {
     descricao: "",
     valor: "",
   })
-  // Remover variáveis de estado não utilizadas
-  // const [user, setUser] = useState<any>(null)
-  // const [currentDate, setCurrentDate] = useState("")
 
   useEffect(() => {
-    // Remover verificação de usuário não utilizada
-    // Check if user is logged in
-    // const userData = sessionStorage.getItem("currentUser")
-    // if (!userData) {
-    //   router.push("/")
-    //   return
-    // }
-    // setUser(JSON.parse(userData))
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        const [fornecedoresData, comprasData, ingredientesData] = await Promise.all([
+          DataService.getFornecedores(),
+          DataService.getCompras(),
+          DataService.getIngredientes(),
+        ])
 
-    // Format current date
-    // const today = new Date()
-    // const options: Intl.DateTimeFormatOptions = {
-    //   weekday: "long",
-    //   year: "numeric",
-    //   month: "long",
-    //   day: "numeric",
-    // }
-    // setCurrentDate(today.toLocaleDateString("pt-BR", options))
+        setFornecedores(fornecedoresData)
+        setCompras(comprasData)
+        setIngredientesDisponiveis(ingredientesData)
+        
+        // Check for alerts
+        ingredientesData.forEach((ingrediente) => {
+          if (ingrediente.estoque < 10) {
+            toast({
+              title: "Atenção",
+              description: `Estoque de ${ingrediente.nome} está baixo!`,
+            })
+          }
+        })
+      } catch (error) {
+        console.error("Erro ao carregar dados de compras:", error)
+        toast({
+          title: "Erro",
+          description: "Falha ao carregar dados de compras.",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
 
-    // Load data from localStorage
     loadData()
-
-    // Check for alerts
-    checkAlerts()
 
     // Check URL parameters for active tab
     if (typeof window !== "undefined") {
@@ -116,26 +114,7 @@ export default function ComprasPage() {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router])
-
-  function loadData() {
-    try {
-      const fornecedoresData = JSON.parse(localStorage.getItem("fornecedores") || "[]")
-      const comprasData = JSON.parse(localStorage.getItem("compras") || "[]")
-      const ingredientesData = JSON.parse(localStorage.getItem("ingredientes") || "[]")
-      
-      setIngredientesDisponiveis(ingredientesData)
-      setFornecedores(fornecedoresData)
-      setCompras(comprasData)
-    } catch (error) {
-      console.error("Erro ao carregar dados de compras:", error)
-      toast({
-        title: "Erro",
-        description: "Falha ao carregar dados de compras.",
-        variant: "destructive",
-      })
-    }
-  }
+  }, [toast])
 
   const handleRacaoChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -205,7 +184,7 @@ export default function ComprasPage() {
     return true
   }
 
-  const registrarCompraRacao = () => {
+  const registrarCompraRacao = async () => {
     const { data, tipo, fornecedor, quantidade, precoUnitario, descricao } = formRacao
 
     if (!data || !tipo || !fornecedor || !quantidade || !precoUnitario) {
@@ -236,10 +215,9 @@ export default function ComprasPage() {
     }
 
     // Find ingredient
-    const ingredientesData = JSON.parse(localStorage.getItem("ingredientes") || "[]")
-    const ingredienteIndex = ingredientesData.findIndex((ing: any) => ing.id === tipo)
+    const ingrediente = ingredientesDisponiveis.find((ing) => ing.id === tipo)
     
-    if (ingredienteIndex === -1) {
+    if (!ingrediente) {
        toast({
         title: "Erro",
         description: "Ingrediente não encontrado no cadastro!",
@@ -248,23 +226,9 @@ export default function ComprasPage() {
       return
     }
 
-    const ingrediente = ingredientesData[ingredienteIndex]
     const qtdCompra = Number.parseFloat(quantidade)
     const precoCompra = Number.parseFloat(precoUnitario)
     const valorTotal = qtdCompra * precoCompra
-
-    // Create new purchase
-    const newCompra = {
-      data,
-      fornecedor,
-      tipo: ingrediente.nome,
-      quantidade: qtdCompra,
-      valor: valorTotal,
-      descricao: descricao || `Compra de ${ingrediente.nome}`,
-      categoria: "Ração",
-    }
-
-    const updatedCompras = [...compras, newCompra]
 
     // Update ingredient stock and price (Weighted Average)
     const estoqueAtual = ingrediente.estoque || 0
@@ -273,36 +237,62 @@ export default function ComprasPage() {
     const novoEstoque = estoqueAtual + qtdCompra
     const novoPrecoMedio = ((estoqueAtual * precoAtual) + valorTotal) / novoEstoque
 
-    ingredientesData[ingredienteIndex] = {
-        ...ingrediente,
-        estoque: novoEstoque,
-        preco: novoPrecoMedio
+    const ingredienteAtualizado = {
+      ...ingrediente,
+      estoque: novoEstoque,
+      preco: novoPrecoMedio
     }
 
-    // Save to localStorage
-    localStorage.setItem("compras", JSON.stringify(updatedCompras))
-    localStorage.setItem("ingredientes", JSON.stringify(ingredientesData))
+    try {
+      // Create new purchase
+      const newCompra: Compra = {
+        id: crypto.randomUUID(),
+        data,
+        fornecedor,
+        tipo: ingrediente.nome,
+        quantidade: qtdCompra,
+        valor: valorTotal,
+        descricao: descricao || `Compra de ${ingrediente.nome}`,
+        categoria: "Ração",
+      }
 
-    setCompras(updatedCompras)
-    setIngredientesDisponiveis(ingredientesData)
+      // Save purchase and updated ingredient
+      const [savedCompra, savedIngrediente] = await Promise.all([
+        DataService.saveCompra(newCompra),
+        DataService.saveIngrediente(ingredienteAtualizado)
+      ])
 
-    toast({
-      title: "Sucesso",
-      description: "Compra de ração registrada e estoque atualizado!",
-    })
+      // Update local state
+      setCompras([...compras, savedCompra])
+      setIngredientesDisponiveis(
+        ingredientesDisponiveis.map((i) => i.id === savedIngrediente.id ? savedIngrediente : i)
+      )
 
-    // Reset form
-    setFormRacao({
-      data: new Date().toLocaleDateString("pt-BR"),
-      tipo: "",
-      fornecedor: "",
-      quantidade: "",
-      precoUnitario: "",
-      descricao: "",
-    })
+      toast({
+        title: "Sucesso",
+        description: "Compra de ração registrada e estoque atualizado!",
+      })
+
+      // Reset form
+      setFormRacao({
+        data: new Date().toLocaleDateString("pt-BR"),
+        tipo: "",
+        fornecedor: "",
+        quantidade: "",
+        precoUnitario: "",
+        descricao: "",
+      })
+    } catch (error) {
+      console.error("Erro ao registrar compra de ração:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível registrar a compra!",
+        variant: "destructive",
+      })
+    }
   }
 
-  const registrarCompraVeterinario = () => {
+  const registrarCompraVeterinario = async () => {
     const { data, fornecedor, tipo, valor } = formVeterinario
 
     if (!data || !fornecedor || !tipo || !valor) {
@@ -323,39 +313,45 @@ export default function ComprasPage() {
       return
     }
 
-    // Create new purchase
-    const newCompra = {
-      data,
-      fornecedor,
-      tipo,
-      quantidade: 1,
-      valor: Number.parseFloat(valor),
-      descricao: `Compra de ${tipo}`,
-      categoria: "Veterinário",
+    try {
+      // Create new purchase
+      const newCompra: Compra = {
+        id: crypto.randomUUID(),
+        data,
+        fornecedor,
+        tipo,
+        quantidade: 1,
+        valor: Number.parseFloat(valor),
+        descricao: `Compra de ${tipo}`,
+        categoria: "Veterinário",
+      }
+
+      const savedCompra = await DataService.saveCompra(newCompra)
+      setCompras([...compras, savedCompra])
+
+      toast({
+        title: "Sucesso",
+        description: "Compra veterinária registrada com sucesso!",
+      })
+
+      // Reset form
+      setFormVeterinario({
+        data: new Date().toLocaleDateString("pt-BR"),
+        fornecedor: "",
+        tipo: "",
+        valor: "",
+      })
+    } catch (error) {
+      console.error("Erro ao registrar compra veterinária:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível registrar a compra!",
+        variant: "destructive",
+      })
     }
-
-    const updatedCompras = [...compras, newCompra]
-
-    // Save to localStorage
-    localStorage.setItem("compras", JSON.stringify(updatedCompras))
-
-    setCompras(updatedCompras)
-
-    toast({
-      title: "Sucesso",
-      description: "Compra veterinária registrada com sucesso!",
-    })
-
-    // Reset form
-    setFormVeterinario({
-      data: new Date().toLocaleDateString("pt-BR"),
-      fornecedor: "",
-      tipo: "",
-      valor: "",
-    })
   }
 
-  const registrarCompraMaoObra = () => {
+  const registrarCompraMaoObra = async () => {
     const { data, descricao, valor } = formMaoObra
 
     if (!data || !descricao || !valor) {
@@ -376,40 +372,46 @@ export default function ComprasPage() {
       return
     }
 
-    // Create new purchase
-    const newCompra = {
-      data,
-      fornecedor: "",
-      tipo: "Serviço",
-      quantidade: 1,
-      valor: Number.parseFloat(valor),
-      descricao,
-      categoria: "Mão de Obra",
+    try {
+      // Create new purchase
+      const newCompra: Compra = {
+        id: crypto.randomUUID(),
+        data,
+        fornecedor: "",
+        tipo: "Serviço",
+        quantidade: 1,
+        valor: Number.parseFloat(valor),
+        descricao,
+        categoria: "Mão de Obra",
+      }
+
+      const savedCompra = await DataService.saveCompra(newCompra)
+      setCompras([...compras, savedCompra])
+
+      toast({
+        title: "Sucesso",
+        description: "Mão de obra registrada com sucesso!",
+      })
+
+      recordAction("registrar_compra", { categoria: "mao_obra" })
+
+      // Reset form
+      setFormMaoObra({
+        data: new Date().toLocaleDateString("pt-BR"),
+        descricao: "",
+        valor: "",
+      })
+    } catch (error) {
+      console.error("Erro ao registrar mão de obra:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível registrar a compra!",
+        variant: "destructive",
+      })
     }
-
-    const updatedCompras = [...compras, newCompra]
-
-    // Save to localStorage
-    localStorage.setItem("compras", JSON.stringify(updatedCompras))
-
-    setCompras(updatedCompras)
-
-    toast({
-      title: "Sucesso",
-      description: "Mão de obra registrada com sucesso!",
-    })
-
-    recordAction("registrar_compra", { categoria: "mao_obra" })
-
-    // Reset form
-    setFormMaoObra({
-      data: new Date().toLocaleDateString("pt-BR"),
-      descricao: "",
-      valor: "",
-    })
   }
 
-  const registrarCompraProdutos = () => {
+  const registrarCompraProdutos = async () => {
     const { data, fornecedor, descricao, valor } = formProdutos
 
     if (!data || !fornecedor || !descricao || !valor) {
@@ -430,55 +432,66 @@ export default function ComprasPage() {
       return
     }
 
-    // Create new purchase
-    const newCompra = {
-      data,
-      fornecedor,
-      tipo: "Produto",
-      quantidade: 1,
-      valor: Number.parseFloat(valor),
-      descricao,
-      categoria: "Produtos Diversos",
+    try {
+      // Create new purchase
+      const newCompra: Compra = {
+        id: crypto.randomUUID(),
+        data,
+        fornecedor,
+        tipo: "Produto",
+        quantidade: 1,
+        valor: Number.parseFloat(valor),
+        descricao,
+        categoria: "Produtos Diversos",
+      }
+
+      const savedCompra = await DataService.saveCompra(newCompra)
+      setCompras([...compras, savedCompra])
+
+      toast({
+        title: "Sucesso",
+        description: "Compra de produtos registrada com sucesso!",
+      })
+
+      recordAction("registrar_compra", { categoria: "produtos" })
+
+      // Reset form
+      setFormProdutos({
+        data: new Date().toLocaleDateString("pt-BR"),
+        fornecedor: "",
+        descricao: "",
+        valor: "",
+      })
+    } catch (error) {
+      console.error("Erro ao registrar compra de produtos:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível registrar a compra!",
+        variant: "destructive",
+      })
     }
-
-    const updatedCompras = [...compras, newCompra]
-
-    // Save to localStorage
-    localStorage.setItem("compras", JSON.stringify(updatedCompras))
-
-    setCompras(updatedCompras)
-
-    toast({
-      title: "Sucesso",
-      description: "Compra de produtos registrada com sucesso!",
-    })
-
-    recordAction("registrar_compra", { categoria: "produtos" })
-
-    // Reset form
-    setFormProdutos({
-      data: new Date().toLocaleDateString("pt-BR"),
-      fornecedor: "",
-      descricao: "",
-      valor: "",
-    })
   }
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value)
   }
 
-  function checkAlerts() {
-    // Verificar se há ingredientes com estoque baixo
-    const ingredientesData = JSON.parse(localStorage.getItem("ingredientes") || "[]")
-    ingredientesData.forEach((ingrediente: any) => {
-      if (ingrediente.estoque < 10) {
-        toast({
-          title: "Atenção",
-          description: `Estoque de ${ingrediente.nome} está baixo!`,
-        })
-      }
-    })
+  const deletarCompra = async (id: string) => {
+    try {
+      await DataService.deleteCompra(id)
+      setCompras(compras.filter((c) => c.id !== id))
+      toast({
+        title: "Sucesso",
+        description: "Compra deletada com sucesso!",
+      })
+    } catch (error) {
+      console.error("Erro ao deletar compra:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível deletar a compra!",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -859,40 +872,56 @@ export default function ComprasPage() {
           <CardContent>
             <div className="rounded-md border">
               <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Categoria</TableHead>
-                    <TableHead>Detalhes</TableHead>
-                    <TableHead>Quantidade</TableHead>
-                    <TableHead>Valor</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {compras.length > 0 ? (
-                    compras.map((compra, index) => {
-                      const fornecedor = fornecedores.find((f) => (f.id && f.id === compra.fornecedor) || f.cpfCnpj === compra.fornecedor)
-                      return (
-                        <TableRow key={index}>
-                          <TableCell>{compra.data}</TableCell>
-                          <TableCell>{compra.categoria}</TableCell>
-                          <TableCell className="max-w-[200px] truncate">
-                            {compra.descricao || (fornecedor ? fornecedor.nome : "N/A")}
-                          </TableCell>
-                          <TableCell>{compra.quantidade}</TableCell>
-                          <TableCell>{formatCurrency(compra.valor)}</TableCell>
-                        </TableRow>
-                      )
-                    })
-                  ) : (
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
-                        Nenhuma compra registrada
-                      </TableCell>
+                      <TableHead>Data</TableHead>
+                      <TableHead>Categoria</TableHead>
+                      <TableHead>Detalhes</TableHead>
+                      <TableHead>Quantidade</TableHead>
+                      <TableHead>Valor</TableHead>
+                      <TableHead>Ações</TableHead>
                     </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-4">
+                          Carregando...
+                        </TableCell>
+                      </TableRow>
+                    ) : compras.length > 0 ? (
+                      compras.map((compra) => {
+                        const fornecedor = fornecedores.find((f) => (f.id && f.id === compra.fornecedor) || f.cpfCnpj === compra.fornecedor)
+                        return (
+                          <TableRow key={compra.id}>
+                            <TableCell>{compra.data}</TableCell>
+                            <TableCell>{compra.categoria}</TableCell>
+                            <TableCell className="max-w-[200px] truncate">
+                              {compra.descricao || (fornecedor ? fornecedor.nome : "N/A")}
+                            </TableCell>
+                            <TableCell>{compra.quantidade}</TableCell>
+                            <TableCell>{formatCurrency(compra.valor)}</TableCell>
+                            <TableCell>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => deletarCompra(compra.id)}
+                              >
+                                Deletar
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-4">
+                          Nenhuma compra registrada
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
             </div>
           </CardContent>
         </Card>
