@@ -16,8 +16,7 @@ import { ConfigService } from "@/services/config-service"
 import { useSubscription } from "@/contexts/subscription-context"
 import { useRouter } from "next/navigation"
 import { GeoService } from "@/services/geo-service"
-import { DataService } from "@/services/data-service"
-import type { Lote, ManejoDia, Estoque, AplicacaoSaude } from "@/services/data-service"
+import { createClient } from "@/lib/supabase-client"
 import Image from "next/image"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -26,15 +25,15 @@ export default function DashboardPage() {
   const { config } = useConfig()
   const { isInTrial, daysLeftInTrial, subscriptionStatus } = useSubscription()
   const { toast } = useToast()
-  const [lotes, setLotes] = useState<Lote[]>([])
-  const [manejoDia, setManejoDia] = useState<ManejoDia>({})
-  const [estoque, setEstoque] = useState<Estoque>({
+  const [lotes, setLotes] = useState<any[]>([])
+  const [manejoDia, setManejoDia] = useState<any>({})
+  const [estoque, setEstoque] = useState<any>({
     ovos: 0,
     galinhas_vivas: 0,
     galinhas_limpas: 0,
     cama_aves: 0,
   })
-  const [aplicacoesSaude, setAplicacoesSaude] = useState<AplicacaoSaude[]>([])
+  const [aplicacoesSaude, setAplicacoesSaude] = useState<any[]>([])
   const [selectedLote, setSelectedLote] = useState("todos")
   const [selectedPeriodo, setSelectedPeriodo] = useState("semana")
   const [alertas, setAlertas] = useState<string[]>([])
@@ -54,28 +53,39 @@ export default function DashboardPage() {
     weather?: Array<{ description?: string; icon?: string }>
   }
 
+  const supabase = createClient()
+
   // Load data on mount
   const loadData = useCallback(async () => {
     try {
-      const [lotesData, manejoData, estoqueData, aplicacoesData, alertasData] = await Promise.all([
-        DataService.getLotes(),
-        DataService.getManejoDia(),
-        DataService.getEstoque(),
-        DataService.getAplicacoesSaude(),
-        DataService.getAlertas()
+      const [lotesRes, manejoRes, estoqueRes, aplicacoesRes] = await Promise.all([
+        supabase.from("lotes").select("*"),
+        supabase.from("manejo_diario").select("*"),
+        supabase.from("estoque").select("*").limit(1).single(),
+        supabase.from("aplicacoes_saude").select("*")
       ])
+
+      console.log("Lotes from Supabase:", lotesRes.data)
+
+      setLotes(lotesRes.data || [])
+
+      const manejoObj: any = {}
+      manejoRes.data?.forEach(item => {
+        if (!manejoObj[item.data]) manejoObj[item.data] = {}
+        manejoObj[item.data][item.periodo] = item
+      })
+      setManejoDia(manejoObj)
       
-      setLotes(lotesData)
-      setManejoDia(manejoData)
-      setEstoque(estoqueData)
-      setAplicacoesSaude(aplicacoesData)
-      setAlertas(alertasData)
+      setEstoque(estoqueRes.data || { ovos: 0, galinhas_vivas: 0, galinhas_limpas: 0, cama_aves: 0 })
+      
+      setAplicacoesSaude(aplicacoesRes.data || [])
+
     } catch (error) {
       console.error("Erro ao carregar dados do dashboard:", error)
     } finally {
       setLoadingData(false)
     }
-  }, [])
+  }, [supabase])
 
   useEffect(() => {
     loadData()
@@ -145,13 +155,21 @@ export default function DashboardPage() {
   }, [])
 
   const handleBackup = useCallback(async () => {
-    const ok = await DataService.testSupabaseConnection()
-    toast({
-      title: ok ? "Teste de conexão concluído" : "Conexão indisponível",
-      description: ok ? "Supabase está online" : "Verifique configurações do Supabase",
-      variant: ok ? undefined : "destructive",
-    })
-  }, [toast])
+    try {
+      const { error } = await supabase.from("lotes").select("id").limit(1)
+      toast({
+        title: error ? "Conexão indisponível" : "Teste de conexão concluído",
+        description: error ? "Verifique configurações do Supabase" : "Supabase está online",
+        variant: error ? "destructive" : undefined,
+      })
+    } catch {
+      toast({
+        title: "Conexão indisponível",
+        description: "Verifique configurações do Supabase",
+        variant: "destructive",
+      })
+    }
+  }, [toast, supabase])
 
   const fetchClimaResumo = useCallback(async (la: string, lo: string) => {
     try {
