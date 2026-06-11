@@ -19,11 +19,11 @@ import { useToast } from "@/components/ui/use-toast"
 export default function AssinaturaPage() {
   const router = useRouter()
   const { toast } = useToast()
-  const { requireAuth } = useAuth()
+  const { requireAuth, loading: authLoading } = useAuth()
   const {
     subscriptionStatus,
     plans,
-    isLoading,
+    isLoading: subscriptionLoading,
     cancelSubscription,
     // renewSubscription,
     confirmPayment,
@@ -56,7 +56,13 @@ export default function AssinaturaPage() {
   }, [subscriptionStatus.paymentStatus, checkPaymentStatus])
 
   // Verificar autenticação
-  requireAuth()
+  useEffect(() => {
+    if (!authLoading) {
+      requireAuth()
+    }
+  }, [authLoading, requireAuth])
+
+  const isLoading = authLoading || subscriptionLoading
 
   const handleSubscribe = async () => {
     setIsProcessing(true)

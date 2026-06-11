@@ -140,13 +140,45 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     try {
       // 1. Tentar carregar do localStorage (rápido)
+      let loadedFromStorage = false
       const savedData = localStorage.getItem("subscription")
       if (savedData) {
-        setSubscriptionStatus(JSON.parse(savedData))
+        try {
+          const parsed = JSON.parse(savedData)
+          setSubscriptionStatus(parsed)
+          loadedFromStorage = true
+        } catch (parseErr) {
+          console.warn("Dados de assinatura no localStorage inválidos, ignorando:", parseErr)
+          localStorage.removeItem("subscription")
+        }
       }
 
       // 2. Sincronizar com o backend (lento, mas preciso)
       await syncSubscriptionWithBackend()
+      
+      // 3. Se não havia dados carregados e não temos um trial ativo, verificar se precisamos inicializar com trial local
+      if (!loadedFromStorage && !subscriptionStatus.trialEndsAt) {
+        // Tentar pegar a data de criação da sessão do usuário (se houver)
+        try {
+          const sessionStr = localStorage.getItem("granja_session")
+          if (sessionStr) {
+            const session = JSON.parse(sessionStr)
+            if (session?.user?.created_at) {
+              const createdAt = new Date(session.user.created_at)
+              const now = new Date()
+              const diffDays = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60 * 24)
+              if (diffDays < 7) {
+                const trialEnd = new Date(createdAt)
+                trialEnd.setDate(trialEnd.getDate() + 7)
+                setSubscriptionStatus(prev => ({
+                  ...prev,
+                  trialEndsAt: trialEnd.toISOString(),
+                }))
+              }
+            }
+          }
+        } catch {}
+      }
     } catch (error) {
       console.error("Erro ao carregar dados de assinatura:", error)
     } finally {
@@ -163,10 +195,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       let accessToken = ""
       try {
         const session = JSON.parse(sessionStr)
-        if (session && session.user && session.user.id) {
+        if (session?.user?.id) {
           userId = session.user.id
         }
-        if (session && session.access_token) {
+        if (session?.access_token) {
           accessToken = session.access_token
         }
       } catch {
@@ -176,18 +208,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (!userId && accessToken) {
         try {
           const resUser = await fetch("/api/auth/user", {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-            },
+            headers: { Authorization: `Bearer ${accessToken}` },
           })
           if (resUser.ok) {
             const dataUser = await resUser.json()
-            if (dataUser && dataUser.user && dataUser.user.id) {
+            if (dataUser?.user?.id) {
               userId = dataUser.user.id
             }
           }
-        } catch {
-        }
+        } catch { }
       }
 
       if (!userId) return
@@ -197,15 +226,22 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         const data = await res.json()
         if (data.active && data.subscription) {
           const sub = data.subscription
-          const plan = plans.find((p) => p.price === sub.price_id) || plans.find((p) => p.id === "mensal")
-          const statusMap: Record<string, any> = {
+          
+          // Find plan more robustly
+          let plan = plans.find(p => 
+            p.id === sub.plan_id || 
+            (sub.price_id && p.price === sub.price_id) ||
+            (sub.metadata?.plan_id && p.id === sub.metadata.plan_id)
+          ) || plans.find(p => p.id === "mensal")!
+
+          const statusMap: Record<string, SubscriptionStatus["paymentStatus"]> = {
             active: "paid",
             trialing: "paid",
           }
 
           const newStatus: SubscriptionStatus = {
             active: true,
-            currentPlan: plan || null,
+            currentPlan: plan,
             startDate: sub.current_period_start,
             endDate: sub.current_period_end,
             paymentStatus: statusMap[sub.status] || "pending",
