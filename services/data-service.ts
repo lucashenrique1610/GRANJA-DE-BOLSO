@@ -278,7 +278,8 @@ export const DataService = {
   },
   
   async saveLote(lote: Lote): Promise<Lote> {
-    const { id, ...rest } = lote
+    const { id, user_id, userId, created_at, createdAt, updated_at, updatedAt, ...rest } = lote
+    console.log("[DataService.saveLote] Sending to API:", id ? "PUT" : "POST", { id, rest })
     if (id) {
       await apiRequest(`lotes/${id}`, 'PUT', rest)
     } else {
