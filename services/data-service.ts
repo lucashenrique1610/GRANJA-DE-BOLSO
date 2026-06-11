@@ -197,6 +197,43 @@ function getSessionToken(): string | null {
   return null
 }
 
+// Funções auxiliares para conversão de snake_case ↔ camelCase
+function toCamelCase(s: string): string {
+  return s.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+}
+
+function toSnakeCase(s: string): string {
+  return s.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
+}
+
+function keysToCamelCase(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(keysToCamelCase)
+  } else if (obj !== null && typeof obj === 'object') {
+    const newObj: any = {}
+    Object.keys(obj).forEach(key => {
+      const newKey = toCamelCase(key)
+      newObj[newKey] = keysToCamelCase(obj[key])
+    })
+    return newObj
+  }
+  return obj
+}
+
+function keysToSnakeCase(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(keysToSnakeCase)
+  } else if (obj !== null && typeof obj === 'object') {
+    const newObj: any = {}
+    Object.keys(obj).forEach(key => {
+      const newKey = toSnakeCase(key)
+      newObj[newKey] = keysToSnakeCase(obj[key])
+    })
+    return newObj
+  }
+  return obj
+}
+
 // Função auxiliar para requisições à API
 async function apiRequest(
   endpoint: string, 
@@ -216,7 +253,7 @@ async function apiRequest(
   }
 
   if (body && method !== 'GET') {
-    config.body = JSON.stringify(body)
+    config.body = JSON.stringify(keysToSnakeCase(body))
   }
 
   try {
@@ -225,7 +262,8 @@ async function apiRequest(
       const errorData = await res.json().catch(() => ({}))
       throw new Error(errorData.error || `Erro na requisição: ${res.status}`)
     }
-    return await res.json()
+    const data = await res.json()
+    return keysToCamelCase(data)
   } catch (error) {
     console.error(`[API Request] Error on ${endpoint}:`, error)
     throw error
@@ -240,7 +278,11 @@ export const DataService = {
   },
   
   async saveLote(lote: Lote): Promise<Lote> {
-    await apiRequest('lotes', 'POST', lote)
+    if (lote.id) {
+      await apiRequest(`lotes/${lote.id}`, 'PUT', lote)
+    } else {
+      await apiRequest('lotes', 'POST', lote)
+    }
     return lote
   },
 
@@ -252,10 +294,16 @@ export const DataService = {
   async getVisitas(): Promise<VisitaVeterinaria[]> {
     return await apiRequest('visitas-veterinarias')
   },
+  async getVisitasVeterinarias(): Promise<VisitaVeterinaria[]> {
+    return await this.getVisitas()
+  },
   
   async saveVisita(visita: VisitaVeterinaria): Promise<VisitaVeterinaria> {
     await apiRequest('visitas-veterinarias', 'POST', visita)
     return visita
+  },
+  async saveVisitaVeterinaria(visita: VisitaVeterinaria): Promise<VisitaVeterinaria> {
+    return await this.saveVisita(visita)
   },
 
   async deleteVisita(id: string): Promise<void> {
@@ -274,14 +322,17 @@ export const DataService = {
       }
       manejoDia[item.data][periodo] = {
         status: item.status,
-        lote_id: item.lote_id,
+        loteId: item.loteId,
+        lote_id: item.loteId,
         ovos: item.ovos,
-        ovos_danificados: item.ovos_danificados,
+        ovosDanificados: item.ovosDanificados,
+        ovos_danificados: item.ovosDanificados,
         racao: item.racao,
         agua: item.agua,
         porta: item.porta,
         outros: item.outros,
-        peso_ovos: item.peso_ovos,
+        pesoOvos: item.pesoOvos,
+        peso_ovos: item.pesoOvos,
         classificacao: item.classificacao
       }
     })

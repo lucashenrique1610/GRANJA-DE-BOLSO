@@ -1,89 +1,78 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase-admin"
+import { getUserFromRequest } from "@/lib/auth-helper"
 import { verifyResourceAccess, handleAccessError } from "@/lib/security"
 
 export async function PUT(
-  request: NextRequest,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = params.id
-    
-    // 1. Verificar Isolamento e Autorização
-    const access = await verifyResourceAccess(request, "lotes", id)
-    if (access.status !== "granted") {
-        // Retorna 401, 403 ou 404 conforme apropriado
-        return handleAccessError(access)
-    }
-    
-    // Usuário autenticado e dono do recurso
-    const body = await request.json()
-    const { quantidade, fornecedor, dataCompra, valorLote, valorAve, tipo, raca, femeas, machos } = body
-
-    // Validação básica
-    if (!id || !quantidade || !fornecedor || !dataCompra) {
-      return NextResponse.json({ error: "Dados incompletos" }, { status: 400 })
+    const user = await getUserFromRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // 2. Executar Update
+    const { id } = params
+    const body = await req.json()
+
     const { error } = await supabaseAdmin
       .from("lotes")
       .update({
-        quantidade,
-        fornecedor,
-        data_compra: dataCompra,
-        valor_lote: valorLote,
-        valor_ave: valorAve,
-        tipo,
-        raca,
-        femeas,
-        machos,
-        updated_at: new Date().toISOString()
+        quantidade: body.quantidade,
+        fornecedor: body.fornecedor,
+        data_compra: body.data_compra,
+        valor_lote: body.valor_lote,
+        valor_ave: body.valor_ave,
+        tipo: body.tipo,
+        raca: body.raca,
+        femeas: body.femeas,
+        machos: body.machos,
+        nome: body.nome,
+        localizacao: body.localizacao,
+        finalidade: body.finalidade,
+        observacoes: body.observacoes,
+        documentos: body.documentos
       })
       .eq("id", id)
-      // Redundância de segurança: garantir que só atualiza se for do usuário
-      .eq("user_id", access.user.id)
+      .eq("user_id", user.id)
 
     if (error) {
-      console.error("Erro ao atualizar lote no Supabase:", error)
-      return NextResponse.json({ error: "Erro ao atualizar no banco de dados" }, { status: 500 })
+      console.error("[API/Lotes] Erro ao atualizar lote:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Erro interno:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
 
 export async function DELETE(
-  request: NextRequest,
+  req: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const id = params.id
-    
-    // 1. Verificar Isolamento e Autorização
-    const access = await verifyResourceAccess(request, "lotes", id)
-    if (access.status !== "granted") {
-        return handleAccessError(access)
+    const user = await getUserFromRequest(req)
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // 2. Executar Delete
+    const { id } = params
+
     const { error } = await supabaseAdmin
       .from("lotes")
       .delete()
       .eq("id", id)
-      .eq("user_id", access.user.id)
+      .eq("user_id", user.id)
 
     if (error) {
-      console.error("Erro ao deletar lote no Supabase:", error)
-      return NextResponse.json({ error: "Erro ao deletar do banco de dados" }, { status: 500 })
+      console.error("[API/Lotes] Erro ao deletar lote:", error)
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Erro interno:", error)
-    return NextResponse.json({ error: "Erro interno do servidor" }, { status: 500 })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
