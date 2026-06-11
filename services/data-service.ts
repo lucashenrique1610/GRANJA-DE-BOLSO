@@ -268,10 +268,11 @@ export const DataService = {
     const manejoDia: ManejoDia = {}
     
     manejoData.forEach((item: any) => {
+      const periodo = item.periodo as 'manha' | 'tarde'
       if (!manejoDia[item.data]) {
         manejoDia[item.data] = {}
       }
-      manejoDia[item.data][item.periodo] = {
+      manejoDia[item.data][periodo] = {
         status: item.status,
         lote_id: item.lote_id,
         ovos: item.ovos,
