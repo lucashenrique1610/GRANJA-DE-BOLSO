@@ -437,7 +437,6 @@ export default function AnimaisPage() {
 
     // Prepare data object
     const loteData = {
-      id: editingId || crypto.randomUUID(), // Use UUID for Supabase
       quantidade: Number.parseInt(quantidade),
       fornecedor,
       dataCompra: formatDateForApi(data),
@@ -503,19 +502,14 @@ export default function AnimaisPage() {
       }
     } else {
       // CREATE LOGIC
-      const newLote = {
-        ...loteData,
-      }
-
       try {
-        await DataService.saveLote(newLote)
+        const result = await DataService.saveLote(loteData as any)
+        console.log("Lote criado:", result)
 
         // Update Stock
         const estoque = await DataService.getEstoque()
         estoque.galinhas_vivas = (estoque.galinhas_vivas || 0) + Number.parseInt(quantidade)
         await DataService.saveEstoque(estoque)
-
-        setLotes([...lotes, newLote])
 
         toast({
           title: "Sucesso",

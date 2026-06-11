@@ -35,12 +35,11 @@ export async function POST(req: Request) {
     const body = await req.json()
     console.log("[API/Lotes] POST request body:", body)
 
-    const { id, quantidade, fornecedor, data_compra, valor_lote, valor_ave, tipo, raca, femeas, machos, nome, localizacao, finalidade, observacoes, documentos } = body
+    const { quantidade, fornecedor, data_compra, valor_lote, valor_ave, tipo, raca, femeas, machos, nome, localizacao, finalidade, observacoes, documentos } = body
 
     const { data, error } = await supabaseAdmin
       .from("lotes")
       .insert({
-        id,
         user_id: user.id,
         quantidade,
         fornecedor,
