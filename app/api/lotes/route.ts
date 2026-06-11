@@ -33,18 +33,20 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { id, quantidade, fornecedor, dataCompra, valorLote, valorAve, tipo, raca, femeas, machos, nome, localizacao, finalidade, observacoes, documentos } = body
+    console.log("[API/Lotes] POST request body:", body)
 
-    const { error } = await supabaseAdmin
+    const { id, quantidade, fornecedor, data_compra, valor_lote, valor_ave, tipo, raca, femeas, machos, nome, localizacao, finalidade, observacoes, documentos } = body
+
+    const { data, error } = await supabaseAdmin
       .from("lotes")
       .insert({
         id,
         user_id: user.id,
         quantidade,
         fornecedor,
-        data_compra: dataCompra,
-        valor_lote: valorLote,
-        valor_ave: valorAve,
+        data_compra,
+        valor_lote,
+        valor_ave,
         tipo,
         raca,
         femeas,
@@ -55,14 +57,17 @@ export async function POST(req: Request) {
         observacoes,
         documentos
       })
+      .select()
 
     if (error) {
       console.error("[API/Lotes] Erro ao criar lote:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    console.log("[API/Lotes] Lote criado com sucesso:", data)
+    return NextResponse.json({ success: true, data })
   } catch (e: any) {
+    console.error("[API/Lotes] Erro no POST:", e)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }

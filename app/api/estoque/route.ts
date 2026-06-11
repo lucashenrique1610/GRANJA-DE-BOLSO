@@ -43,25 +43,29 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { ovos, galinhasVivas, galinhasLimpas, camaAves } = body
+    console.log("[API/Estoque] POST request body:", body)
+    const { ovos, galinhas_vivas, galinhas_limpas, cama_aves } = body
 
-    const { error } = await supabaseAdmin
+    const { data, error } = await supabaseAdmin
       .from("estoque")
       .upsert({
         user_id: user.id,
         ovos,
-        galinhas_vivas: galinhasVivas,
-        galinhas_limpas: galinhasLimpas,
-        cama_aves: camaAves
+        galinhas_vivas,
+        galinhas_limpas,
+        cama_aves
       }, { onConflict: "user_id" })
+      .select()
 
     if (error) {
       console.error("[API/Estoque] Erro ao salvar estoque:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    console.log("[API/Estoque] Estoque salvo com sucesso:", data)
+    return NextResponse.json({ success: true, data })
   } catch (e: any) {
+    console.error("[API/Estoque] Erro no POST:", e)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
