@@ -12,21 +12,33 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import DashboardLayout from "@/components/dashboard-layout"
 import { Truck, Building2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import type { Fornecedor } from "@/services/data-service"
+import { DataService, type Fornecedor } from "@/services/data-service"
 import { useTips } from "@/contexts/tips-context"
 
 export default function FornecedoresPage() {
   const { toast } = useToast()
   const { recordAction } = useTips()
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const savedFornecedores = localStorage.getItem("fornecedores")
-    if (savedFornecedores) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFornecedores(JSON.parse(savedFornecedores))
+    const load = async () => {
+      try {
+        const data = await DataService.getFornecedores()
+        setFornecedores(data)
+      } catch (error) {
+        console.error("Erro ao carregar fornecedores:", error)
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar a lista de fornecedores!",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
     }
-  }, [])
+    load()
+  }, [toast])
   
   const [formData, setFormData] = useState({
     nome: "",
@@ -35,8 +47,6 @@ export default function FornecedoresPage() {
     endereco: "",
     produtos: "",
   })
-
-  
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -69,7 +79,7 @@ export default function FornecedoresPage() {
     setFormData((prev) => ({ ...prev, telefone: formattedTelefone }))
   }
 
-  const cadastrarFornecedor = () => {
+  const cadastrarFornecedor = async () => {
     const { nome, cnpj, telefone, endereco, produtos } = formData
 
     if (!nome || !telefone || !endereco) {
@@ -90,38 +100,59 @@ export default function FornecedoresPage() {
       return
     }
 
-    // Create new supplier
-    const newFornecedor: Fornecedor = {
-      id: crypto.randomUUID(),
-      nome,
-      cpfCnpj: cnpj,
-      telefone,
-      endereco,
-      produtos,
+    try {
+      const newFornecedor: Fornecedor = {
+        id: crypto.randomUUID(),
+        nome,
+        cpfCnpj: cnpj,
+        telefone,
+        endereco,
+        produtos,
+      }
+
+      await DataService.saveFornecedor(newFornecedor)
+      setFornecedores([...fornecedores, newFornecedor])
+
+      toast({
+        title: "Sucesso",
+        description: "Fornecedor cadastrado com sucesso!",
+      })
+
+      recordAction("cadastrar_fornecedor")
+
+      setFormData({
+        nome: "",
+        cnpj: "",
+        telefone: "",
+        endereco: "",
+        produtos: "",
+      })
+    } catch (error) {
+      console.error("Erro ao salvar fornecedor:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar o fornecedor!",
+        variant: "destructive",
+      })
     }
+  }
 
-    const updatedFornecedores = [...fornecedores, newFornecedor]
-
-    // Save to localStorage
-    localStorage.setItem("fornecedores", JSON.stringify(updatedFornecedores))
-
-    setFornecedores(updatedFornecedores)
-
-    toast({
-      title: "Sucesso",
-      description: "Fornecedor cadastrado com sucesso!",
-    })
-
-    recordAction("cadastrar_fornecedor")
-
-    // Reset form
-    setFormData({
-      nome: "",
-      cnpj: "",
-      telefone: "",
-      endereco: "",
-      produtos: "",
-    })
+  const deletarFornecedor = async (id: string) => {
+    try {
+      await DataService.deleteFornecedor(id)
+      setFornecedores(fornecedores.filter((f) => f.id !== id))
+      toast({
+        title: "Sucesso",
+        description: "Fornecedor deletado com sucesso!",
+      })
+    } catch (error) {
+      console.error("Erro ao deletar fornecedor:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível deletar o fornecedor!",
+        variant: "destructive",
+      })
+    }
   }
 
   return (
@@ -222,21 +253,37 @@ export default function FornecedoresPage() {
                       <TableHead>CNPJ</TableHead>
                       <TableHead>Telefone</TableHead>
                       <TableHead>Produtos</TableHead>
+                      <TableHead>Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {fornecedores.length > 0 ? (
-                      fornecedores.map((fornecedor, index) => (
-                        <TableRow key={index}>
+                    {loading ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
+                          Carregando...
+                        </TableCell>
+                      </TableRow>
+                    ) : fornecedores.length > 0 ? (
+                      fornecedores.map((fornecedor) => (
+                        <TableRow key={fornecedor.id}>
                           <TableCell>{fornecedor.nome}</TableCell>
                           <TableCell>{fornecedor.cpfCnpj}</TableCell>
                           <TableCell>{fornecedor.telefone}</TableCell>
                           <TableCell className="max-w-[200px] truncate">{fornecedor.produtos}</TableCell>
+                          <TableCell>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => deletarFornecedor(fornecedor.id)}
+                            >
+                              Deletar
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={4} className="text-center text-muted-foreground py-4">
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-4">
                           Nenhum fornecedor cadastrado
                         </TableCell>
                       </TableRow>
