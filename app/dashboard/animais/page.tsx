@@ -268,15 +268,18 @@ export default function AnimaisPage() {
     })
   }
 
-  const loadData = () => {
+  const loadData = async () => {
     try {
-      const lotesData = JSON.parse(localStorage.getItem("lotes") || "[]")
-      const fornecedoresData = JSON.parse(localStorage.getItem("fornecedores") || "[]")
+      // Load data from Supabase via DataService
+      const lotesData = await DataService.getLotes()
+      const fornecedoresData = await DataService.getFornecedores()
+      const visitasData = await DataService.getVisitasVeterinarias()
+      const aplicacoesData = await DataService.getAplicacoesSaude()
+      const mortalidadeData = await DataService.getMortalidade()
+      const manejoDiaData = await DataService.getManejoDia()
+      
+      // PesosLotes is still local for now as it's not on DB schema yet
       const pesosLotesData = JSON.parse(localStorage.getItem("pesosLotes") || "[]")
-      const visitasData = JSON.parse(localStorage.getItem("visitasVeterinarias") || "[]")
-      const aplicacoesData = JSON.parse(localStorage.getItem("aplicacoesSaude") || "[]")
-      const mortalidadeData = JSON.parse(localStorage.getItem("mortalidade") || "[]")
-      const manejoDiaData = JSON.parse(localStorage.getItem("manejoDia") || "{}")
 
       setLotes(lotesData)
       setFornecedores(fornecedoresData)
@@ -296,8 +299,11 @@ export default function AnimaisPage() {
   }
 
   useEffect(() => {
-    // Load data from localStorage
-    loadData()
+    // Load data from API
+    const load = async () => {
+      await loadData()
+    }
+    load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -382,7 +388,7 @@ export default function AnimaisPage() {
     setFormCadastro({
       quantidade: lote.quantidade.toString(),
       fornecedor: lote.fornecedor,
-      data: lote.dataCompra,
+      data: formatDateForDisplay(lote.dataCompra),
       valorLote: lote.valorLote.toString(),
       valorAve: lote.valorAve.toString(),
       tipo: lote.tipo,
@@ -390,6 +396,22 @@ export default function AnimaisPage() {
     })
     setEditingId(lote.id)
     setActiveTab("cadastro")
+  }
+
+  // Helper functions for date conversion
+  const formatDateForApi = (dateStr: string) => {
+    const [day, month, year] = dateStr.split('/')
+    return `${year}-${month}-${day}`
+  }
+
+  const formatDateForDisplay = (dateStr: string) => {
+    // If it's already in DD/MM/YYYY, return as is
+    if (dateStr.includes('/')) {
+      return dateStr
+    }
+    // If it's YYYY-MM-DD, convert to DD/MM/YYYY
+    const [year, month, day] = dateStr.split('-')
+    return `${day}/${month}/${year}`
   }
 
   const handleSaveLote = async () => {
@@ -415,13 +437,16 @@ export default function AnimaisPage() {
 
     // Prepare data object
     const loteData = {
+      id: editingId || crypto.randomUUID(), // Use UUID for Supabase
       quantidade: Number.parseInt(quantidade),
       fornecedor,
-      dataCompra: data,
+      dataCompra: formatDateForApi(data),
       valorLote: Number.parseFloat(valorLote),
       valorAve: Number.parseFloat(valorAve),
       tipo,
       raca,
+      femeas: 0,
+      machos: 0,
     }
 
     if (editingId) {
@@ -444,128 +469,79 @@ export default function AnimaisPage() {
       const updatedLote = {
         ...oldLote,
         ...loteData,
-      }
-
-      // Update Stock
-      const diff = loteData.quantidade - oldLote.quantidade
-      if (diff !== 0) {
-        const estoque = JSON.parse(localStorage.getItem("estoque") || "{}")
-        estoque.galinhas_vivas = (estoque.galinhas_vivas || 0) + diff
-        localStorage.setItem("estoque", JSON.stringify(estoque))
+        femeas: oldLote.femeas,
+        machos: oldLote.machos,
       }
 
       try {
-        // Call API
-        const response = await fetch(`/api/lotes/${editingId}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...loteData,
-            femeas: oldLote.femeas,
-            machos: oldLote.machos,
-          }),
-        })
+        // Save via DataService (API)
+        await DataService.saveLote(updatedLote)
 
-        if (!response.ok) {
-           // If API fails, we might still want to update local storage but show a warning
-           // Or strictly fail. User asked for backend response to reflect success/failure.
-           // I'll log it but proceed with localStorage for offline support if needed, 
-           // but user specifically asked for backend integration.
-           // For now, I'll treat API error as a non-blocking warning for the UI but show error toast.
-           console.error("API Error")
+        // Update Stock
+        const diff = loteData.quantidade - oldLote.quantidade
+        if (diff !== 0) {
+          const estoque = await DataService.getEstoque()
+          estoque.galinhas_vivas = (estoque.galinhas_vivas || 0) + diff
+          await DataService.saveEstoque(estoque)
         }
 
-        // Audit Log
-        const auditLog = {
-          action: "UPDATE",
-          entity: "Lote",
-          entityId: editingId,
-          timestamp: new Date().toISOString(),
-          changes: {
-            before: oldLote,
-            after: updatedLote,
-          },
-          user: "admin", 
-        }
-        const audits = JSON.parse(localStorage.getItem("audit_logs") || "[]")
-        audits.push(auditLog)
-        localStorage.setItem("audit_logs", JSON.stringify(audits))
-
-        // Update Local State & Storage
+        // Update Local State
         const updatedLotes = [...lotes]
         updatedLotes[loteIndex] = updatedLote
         setLotes(updatedLotes)
-        localStorage.setItem("lotes", JSON.stringify(updatedLotes))
 
         toast({ title: "Sucesso", description: "Lote atualizado com sucesso!" })
         cancelarEdicao()
+        await loadData() // Reload data from DB to ensure sync
       } catch (error) {
         console.error("Erro ao atualizar lote:", error)
         toast({
-            title: "Aviso",
-            description: "Lote salvo localmente, mas houve erro na sincronização.",
-            variant: "default"
+            title: "Erro",
+            description: "Falha ao salvar no banco de dados!",
+            variant: "destructive"
         })
-         // Still save locally even if API fails (offline first approach)
-         // Audit Log
-        const auditLog = {
-          action: "UPDATE",
-          entity: "Lote",
-          entityId: editingId,
-          timestamp: new Date().toISOString(),
-          changes: {
-            before: oldLote,
-            after: updatedLote,
-          },
-          user: "admin", 
-        }
-        const audits = JSON.parse(localStorage.getItem("audit_logs") || "[]")
-        audits.push(auditLog)
-        localStorage.setItem("audit_logs", JSON.stringify(audits))
-
-        const updatedLotes = [...lotes]
-        updatedLotes[loteIndex] = updatedLote
-        setLotes(updatedLotes)
-        localStorage.setItem("lotes", JSON.stringify(updatedLotes))
-        cancelarEdicao()
       }
     } else {
       // CREATE LOGIC
-      const id = `Lote ${lotes.length + 1}`
       const newLote = {
-        id,
         ...loteData,
-        femeas: 0,
-        machos: 0,
       }
 
-      const updatedLotes = [...lotes, newLote]
+      try {
+        await DataService.saveLote(newLote)
 
-      // Update stock
-      const estoque = JSON.parse(localStorage.getItem("estoque") || "{}")
-      estoque.galinhas_vivas = (estoque.galinhas_vivas || 0) + Number.parseInt(quantidade)
+        // Update Stock
+        const estoque = await DataService.getEstoque()
+        estoque.galinhas_vivas = (estoque.galinhas_vivas || 0) + Number.parseInt(quantidade)
+        await DataService.saveEstoque(estoque)
 
-      // Save to localStorage
-      localStorage.setItem("lotes", JSON.stringify(updatedLotes))
-      localStorage.setItem("estoque", JSON.stringify(estoque))
+        setLotes([...lotes, newLote])
 
-      setLotes(updatedLotes)
+        toast({
+          title: "Sucesso",
+          description: "Lote cadastrado com sucesso!",
+        })
 
-      toast({
-        title: "Sucesso",
-        description: `Lote ${id} cadastrado com sucesso!`,
-      })
+        // Reset form
+        setFormCadastro({
+          quantidade: "",
+          fornecedor: "",
+          data: new Date().toLocaleDateString("pt-BR"),
+          valorLote: "",
+          valorAve: "",
+          tipo: "pintainhas",
+          raca: "",
+        })
 
-      // Reset form
-      setFormCadastro({
-        quantidade: "",
-        fornecedor: "",
-        data: new Date().toLocaleDateString("pt-BR"),
-        valorLote: "",
-        valorAve: "",
-        tipo: "pintainhas",
-        raca: "",
-      })
+        await loadData() // Reload data from DB
+      } catch (error) {
+        console.error("Erro ao criar lote:", error)
+        toast({
+          title: "Erro",
+          description: "Falha ao salvar no banco de dados!",
+          variant: "destructive"
+        })
+      }
     }
   }
 
@@ -617,7 +593,7 @@ export default function AnimaisPage() {
     })
   }
 
-  const atualizarSexoLote = () => {
+  const atualizarSexoLote = async () => {
     const { loteId, femeas, machos } = formSexo
 
     if (!loteId || !femeas || !machos) {
@@ -662,22 +638,32 @@ export default function AnimaisPage() {
       machos: machoNum,
     }
 
-    // Save to localStorage
-    localStorage.setItem("lotes", JSON.stringify(updatedLotes))
+    try {
+      await DataService.saveLote(updatedLotes[loteIndex])
+      
+      setLotes(updatedLotes)
 
-    setLotes(updatedLotes)
+      toast({
+        title: "Sucesso",
+        description: `Sexo atualizado para ${loteId}!`,
+      })
 
-    toast({
-      title: "Sucesso",
-      description: `Sexo atualizado para ${loteId}!`,
-    })
-
-    // Reset form
-    setFormSexo({
-      loteId: "",
-      femeas: "",
-      machos: "",
-    })
+      // Reset form
+      setFormSexo({
+        loteId: "",
+        femeas: "",
+        machos: "",
+      })
+      
+      await loadData()
+    } catch (error) {
+      console.error("Erro ao atualizar sexo:", error)
+      toast({
+        title: "Erro",
+        description: "Falha ao salvar no banco de dados!",
+        variant: "destructive",
+      })
+    }
   }
 
   // Handlers for "Editar Lotes" Tab
@@ -689,10 +675,12 @@ export default function AnimaisPage() {
     // Convert ManejoDia to list
     const loteManejo: HistoricoManejoItem[] = []
     Object.entries(allManejoDia).forEach(([date, periods]) => {
+        const displayDate = formatDateForDisplay(date)
+        
         if (periods.manha && periods.manha.loteId === lote.id) {
              loteManejo.push({
                  id: `man-${date}-manha`,
-                 data: date,
+                 data: displayDate,
                  periodo: "Manhã",
                  hora: "08:00",
                  ovos: periods.manha.ovos || 0,
@@ -705,7 +693,7 @@ export default function AnimaisPage() {
         if (periods.tarde && periods.tarde.loteId === lote.id) {
              loteManejo.push({
                  id: `man-${date}-tarde`,
-                 data: date,
+                 data: displayDate,
                  periodo: "Tarde",
                  hora: "16:00",
                  ovos: periods.tarde.ovos || 0,
@@ -718,10 +706,23 @@ export default function AnimaisPage() {
     })
 
     setEditingLoteData({
-      lote: { ...lote },
-      aplicacoes: loteAplicacoes.map(a => ({...a})),
-      visitas: loteVisitas.map(v => ({...v})),
-      mortalidade: loteMortalidade.map(m => ({...m})),
+      lote: { 
+        ...lote, 
+        dataCompra: formatDateForDisplay(lote.dataCompra)
+      },
+      aplicacoes: loteAplicacoes.map(a => ({
+        ...a, 
+        data: formatDateForDisplay(a.data),
+        dataProxima: a.dataProxima ? formatDateForDisplay(a.dataProxima) : a.dataProxima
+      })),
+      visitas: loteVisitas.map(v => ({
+        ...v, 
+        data: formatDateForDisplay(v.data)
+      })),
+      mortalidade: loteMortalidade.map(m => ({
+        ...m, 
+        data: formatDateForDisplay(m.data)
+      })),
       manejo: loteManejo
     })
     setViewMode("edit")
@@ -873,7 +874,7 @@ export default function AnimaisPage() {
     }))
   }
 
-  const handleSaveFullEdit = () => {
+  const handleSaveFullEdit = async () => {
     if (!editingLoteData.lote) return
 
     // Validation
@@ -910,91 +911,114 @@ export default function AnimaisPage() {
         }
     }
 
-    // Update Lote
-    const updatedLotes = lotes.map(l => l.id === editingLoteData.lote!.id ? editingLoteData.lote! : l)
-    setLotes(updatedLotes)
-    localStorage.setItem("lotes", JSON.stringify(updatedLotes))
-
-    // Update Aplicacoes
-    const otherApps = allAplicacoes.filter(a => a.loteId !== editingLoteData.lote!.id)
-    const finalApps = [...otherApps, ...editingLoteData.aplicacoes]
-    setAllAplicacoes(finalApps)
-    localStorage.setItem("aplicacoesSaude", JSON.stringify(finalApps))
-
-    // Update Visitas
-    const otherVisitas = visitasVeterinarias.filter(v => v.loteId !== editingLoteData.lote!.id)
-    const finalVisitas = [...otherVisitas, ...editingLoteData.visitas]
-    setVisitasVeterinarias(finalVisitas)
-    localStorage.setItem("visitasVeterinarias", JSON.stringify(finalVisitas))
-
-    // Update Mortalidade
-    const otherMortalidade = allMortalidade.filter(m => m.loteId !== editingLoteData.lote!.id)
-    const finalMortalidade = [...otherMortalidade, ...editingLoteData.mortalidade]
-    setAllMortalidade(finalMortalidade)
-    localStorage.setItem("mortalidade", JSON.stringify(finalMortalidade))
-
-    // Update Manejo
-    const newManejoDia = { ...allManejoDia }
-    // First, clear existing entries for this lote
-    Object.keys(newManejoDia).forEach(date => {
-        if (newManejoDia[date].manha?.loteId === editingLoteData.lote!.id) {
-            delete newManejoDia[date].manha
-        }
-        if (newManejoDia[date].tarde?.loteId === editingLoteData.lote!.id) {
-            delete newManejoDia[date].tarde
-        }
-        // Cleanup empty dates
-        if (!newManejoDia[date].manha && !newManejoDia[date].tarde) {
-            delete newManejoDia[date]
-        }
-    })
-    
-    // Add new entries from editingLoteData.manejo
-    editingLoteData.manejo.forEach(item => {
-        if (!newManejoDia[item.data]) {
-            newManejoDia[item.data] = {}
-        }
-        const manejoRecord: Manejo = {
-            loteId: editingLoteData.lote!.id,
-            ovos: item.ovos,
-            ovosDanificados: item.ovosDanificados,
-            racao: item.racao,
-            porta: item.porta,
-            outros: item.observacoes || "",
-            status: "realizado",
-            agua: 0,
-            pesoOvos: 0,
-            classificacao: ""
-        }
-        
-        if (item.periodo === "Manhã") {
-            newManejoDia[item.data].manha = manejoRecord
-        } else {
-            newManejoDia[item.data].tarde = manejoRecord
-        }
-    })
-    
-    setAllManejoDia(newManejoDia)
-    localStorage.setItem("manejoDia", JSON.stringify(newManejoDia))
-
-    // Audit Log
     try {
-        DataService.saveAuditLog({
-            id: crypto.randomUUID(),
-            timestamp: new Date().toISOString(),
-            action: "update",
-            entity: "lote",
-            entityId: editingLoteData.lote!.id,
-            details: "Edição manual completa (Histórico de Manejo/Mortalidade/Saúde)",
-            user: "Usuário"
-        })
-    } catch (e) {
-        console.error("Failed to save audit log", e)
-    }
+      // Save Lote
+      const loteToSave = {
+        ...editingLoteData.lote,
+        dataCompra: formatDateForApi(editingLoteData.lote.dataCompra),
+      }
+      await DataService.saveLote(loteToSave)
 
-    toast({ title: "Sucesso", description: "Alterações salvas com sucesso!" })
-    setViewMode("list")
-    setEditingLoteData({ lote: null, aplicacoes: [], visitas: [], mortalidade: [], manejo: [] })
+      // Save Aplicacoes
+      for (const app of editingLoteData.aplicacoes) {
+        const appToSave = {
+          ...app,
+          id: app.id || crypto.randomUUID(),
+          data: formatDateForApi(app.data),
+          dataProxima: app.dataProxima ? formatDateForApi(app.dataProxima) : ""
+        }
+        await DataService.saveAplicacaoSaude(appToSave)
+      }
+      
+      // Save Visitas
+      for (const visita of editingLoteData.visitas) {
+        const visitaToSave = {
+          ...visita,
+          id: visita.id || crypto.randomUUID(),
+          data: formatDateForApi(visita.data)
+        }
+        await DataService.saveVisitaVeterinaria(visitaToSave)
+      }
+      
+      // Save Mortalidade
+      for (const mort of editingLoteData.mortalidade) {
+        const mortToSave = {
+          ...mort,
+          id: mort.id || crypto.randomUUID(),
+          data: formatDateForApi(mort.data)
+        }
+        await DataService.saveMortalidade(mortToSave)
+      }
+      
+      // Update ManejoDia
+      const newManejoDia = { ...allManejoDia }
+      // First, clear existing entries for this lote
+      Object.keys(newManejoDia).forEach(date => {
+          if (newManejoDia[date].manha?.loteId === editingLoteData.lote!.id) {
+              delete newManejoDia[date].manha
+          }
+          if (newManejoDia[date].tarde?.loteId === editingLoteData.lote!.id) {
+              delete newManejoDia[date].tarde
+          }
+          // Cleanup empty dates
+          if (!newManejoDia[date].manha && !newManejoDia[date].tarde) {
+              delete newManejoDia[date]
+          }
+      })
+      
+      // Add new entries from editingLoteData.manejo
+      editingLoteData.manejo.forEach(item => {
+          const apiDate = formatDateForApi(item.data)
+          if (!newManejoDia[apiDate]) {
+              newManejoDia[apiDate] = {}
+          }
+          const manejoRecord: Manejo = {
+              loteId: editingLoteData.lote!.id,
+              ovos: item.ovos,
+              ovosDanificados: item.ovosDanificados,
+              racao: item.racao,
+              porta: item.porta,
+              outros: item.observacoes || "",
+              status: "realizado",
+              agua: 0,
+              pesoOvos: 0,
+              classificacao: ""
+          }
+          
+          if (item.periodo === "Manhã") {
+              newManejoDia[apiDate].manha = manejoRecord
+          } else {
+              newManejoDia[apiDate].tarde = manejoRecord
+          }
+      })
+      
+      await DataService.saveManejoDia(newManejoDia)
+      
+      // Audit Log
+      try {
+          DataService.saveAuditLog({
+              id: crypto.randomUUID(),
+              timestamp: new Date().toISOString(),
+              action: "update",
+              entity: "lote",
+              entityId: editingLoteData.lote!.id,
+              details: "Edição manual completa (Histórico de Manejo/Mortalidade/Saúde)",
+              user: "Usuário"
+          })
+      } catch (e) {
+          console.error("Failed to save audit log", e)
+      }
+      
+      toast({ title: "Sucesso", description: "Alterações salvas com sucesso!" })
+      setViewMode("list")
+      setEditingLoteData({ lote: null, aplicacoes: [], visitas: [], mortalidade: [], manejo: [] })
+      
+      // Reload everything from DB
+      await loadData()
+    } catch (error) {
+      console.error("Erro ao salvar edição completa:", error)
+      toast({ title: "Erro", description: "Falha ao salvar no banco de dados!", variant: "destructive" })
+    }
   }
 
   return (
