@@ -300,7 +300,12 @@ export const DataService = {
   },
   
   async saveVisita(visita: VisitaVeterinaria): Promise<VisitaVeterinaria> {
-    await apiRequest('visitas-veterinarias', 'POST', visita)
+    const { id, ...rest } = visita
+    if (id) {
+      await apiRequest('visitas-veterinarias', 'POST', rest)
+    } else {
+      await apiRequest('visitas-veterinarias', 'POST', rest)
+    }
     return visita
   },
   async saveVisitaVeterinaria(visita: VisitaVeterinaria): Promise<VisitaVeterinaria> {
@@ -375,7 +380,13 @@ export const DataService = {
   },
   
   async saveAplicacaoSaude(aplicacao: AplicacaoSaude): Promise<AplicacaoSaude> {
-    await apiRequest('aplicacoes-saude', 'POST', aplicacao)
+    const { id, ...rest } = aplicacao
+    if (id) {
+      // Tentativa de PUT, mas se a API não tiver, vamos usar POST (ainda não temos endpoint PUT para aplicacoes)
+      await apiRequest('aplicacoes-saude', 'POST', rest)
+    } else {
+      await apiRequest('aplicacoes-saude', 'POST', rest)
+    }
     return aplicacao
   },
 
@@ -389,7 +400,12 @@ export const DataService = {
   },
   
   async saveMortalidade(mortalidade: Mortalidade): Promise<Mortalidade> {
-    await apiRequest('mortalidade', 'POST', mortalidade)
+    const { id, ...rest } = mortalidade
+    if (id) {
+      await apiRequest('mortalidade', 'POST', rest)
+    } else {
+      await apiRequest('mortalidade', 'POST', rest)
+    }
     
     const estoque = await DataService.getEstoque()
     const novoGalinhasVivas = Math.max(0, estoque.galinhas_vivas - mortalidade.quantidade)

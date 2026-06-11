@@ -32,33 +32,37 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { id, data, loteId, fase, tipo, nome, veterinario, quantidade, observacoes, proximaDose, dataProxima, formulacaoId } = body
+    console.log("[API/Aplicacoes-Saude] POST request body:", body)
+    
+    const { data, lote_id, fase, tipo, nome, veterinario, quantidade, observacoes, proxima_dose, data_proxima, formulacao_id } = body
 
-    const { error } = await supabaseAdmin
+    const { data: insertResult, error } = await supabaseAdmin
       .from("aplicacoes_saude")
       .insert({
-        id,
         user_id: user.id,
         data,
-        lote_id: loteId,
+        lote_id,
         fase,
         tipo,
         nome,
         veterinario,
         quantidade,
         observacoes,
-        proxima_dose: proximaDose,
-        data_proxima: dataProxima,
-        formulacao_id: formulacaoId
+        proxima_dose,
+        data_proxima,
+        formulacao_id
       })
+      .select()
 
     if (error) {
       console.error("[API/Aplicacoes-Saude] Erro ao salvar aplicacao:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    console.log("[API/Aplicacoes-Saude] Aplicacao salva com sucesso:", insertResult)
+    return NextResponse.json({ success: true, data: insertResult })
   } catch (e: any) {
+    console.error("[API/Aplicacoes-Saude] Erro no POST:", e)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }

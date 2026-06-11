@@ -32,27 +32,31 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { id, loteId, data, tipoProcedimento, veterinario, observacoes } = body
+    console.log("[API/Visitas-Veterinarias] POST request body:", body)
+    
+    const { lote_id, data, tipo_procedimento, veterinario, observacoes } = body
 
-    const { error } = await supabaseAdmin
+    const { data: insertResult, error } = await supabaseAdmin
       .from("visitas_veterinarias")
       .insert({
-        id,
         user_id: user.id,
-        lote_id: loteId,
+        lote_id,
         data,
-        tipo_procedimento: tipoProcedimento,
+        tipo_procedimento,
         veterinario,
         observacoes
       })
+      .select()
 
     if (error) {
       console.error("[API/Visitas] Erro ao salvar visita:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    console.log("[API/Visitas-Veterinarias] Visita salva com sucesso:", insertResult)
+    return NextResponse.json({ success: true, data: insertResult })
   } catch (e: any) {
+    console.error("[API/Visitas-Veterinarias] Erro no POST:", e)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }

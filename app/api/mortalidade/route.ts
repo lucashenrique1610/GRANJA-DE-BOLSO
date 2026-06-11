@@ -32,27 +32,31 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json()
-    const { id, data, loteId, quantidade, causa, observacoes } = body
+    console.log("[API/Mortalidade] POST request body:", body)
+    
+    const { data, lote_id, quantidade, causa, observacoes } = body
 
-    const { error } = await supabaseAdmin
+    const { data: insertResult, error } = await supabaseAdmin
       .from("mortalidade")
       .insert({
-        id,
         user_id: user.id,
         data,
-        lote_id: loteId,
+        lote_id,
         quantidade,
         causa,
         observacoes
       })
+      .select()
 
     if (error) {
       console.error("[API/Mortalidade] Erro ao salvar mortalidade:", error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    console.log("[API/Mortalidade] Mortalidade salva com sucesso:", insertResult)
+    return NextResponse.json({ success: true, data: insertResult })
   } catch (e: any) {
+    console.error("[API/Mortalidade] Erro no POST:", e)
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
