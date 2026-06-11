@@ -170,7 +170,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
               if (diffDays < 7) {
                 const trialEnd = new Date(createdAt)
                 trialEnd.setDate(trialEnd.getDate() + 7)
-                setSubscriptionStatus(prev => ({
+                setSubscriptionStatus((prev: SubscriptionStatus) => ({
                   ...prev,
                   trialEndsAt: trialEnd.toISOString(),
                 }))
@@ -228,11 +228,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           const sub = data.subscription
           
           // Find plan more robustly
-          let plan = plans.find(p => 
+          let plan = plans.find((p: SubscriptionPlan) => 
             p.id === sub.plan_id || 
             (sub.price_id && p.price === sub.price_id) ||
             (sub.metadata?.plan_id && p.id === sub.metadata.plan_id)
-          ) || plans.find(p => p.id === "mensal")!
+          ) || plans.find((p: SubscriptionPlan) => p.id === "mensal")!
 
           const statusMap: Record<string, SubscriptionStatus["paymentStatus"]> = {
             active: "paid",
@@ -274,7 +274,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true)
 
-      const plan = plans.find((p) => p.id === planId)
+      const plan = plans.find((p: SubscriptionPlan) => p.id === planId)
       if (!plan) {
         throw new Error("Plano não encontrado")
       }
@@ -418,7 +418,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true)
 
-      const plan = plans.find((p) => p.id === planId)
+      const plan = plans.find((p: SubscriptionPlan) => p.id === planId)
       if (!plan) {
         throw new Error("Plano não encontrado")
       }
@@ -523,7 +523,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const subscribeMercadoPagoPix = async (planId: string): Promise<PixPaymentResponse | null> => {
     try {
       setIsLoading(true)
-      const plan = plans.find((p) => p.id === planId)
+      const plan = plans.find((p: SubscriptionPlan) => p.id === planId)
       if (!plan) throw new Error("Plano não encontrado")
 
       // Tentar obter usuário da sessão (compatível com useAuth)
@@ -604,7 +604,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const subscribeMercadoPagoPreference = async (planId: string): Promise<string | null> => {
     try {
       setIsLoading(true)
-      const plan = plans.find((p) => p.id === planId)
+      const plan = plans.find((p: SubscriptionPlan) => p.id === planId)
       if (!plan) throw new Error("Plano não encontrado")
 
       // Tentar obter usuário da sessão
