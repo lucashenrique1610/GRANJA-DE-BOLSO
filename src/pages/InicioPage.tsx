@@ -9,7 +9,7 @@ import {
   FarmConfigData,
   UnifiedWeatherData,
 } from '@/types';
-import { getWeatherData, searchCity } from '@/lib/weather';
+import { getWeatherData, searchCity, readWeatherCache } from '@/lib/weather';
 import { RouteId } from '@/components/Sidebar';
 import {
   TrendingUp,
@@ -96,7 +96,15 @@ export default function InicioPage({
   useEffect(() => {
     async function loadWeather() {
       try {
-        const cityToSearch = settings.weather?.defaultCity?.name || farm.city || 'São Paulo';
+        const cached = readWeatherCache();
+        if (cached && cached.location) {
+          setWeatherData(cached);
+          return;
+        }
+
+        const cityToSearch = settings.weather?.defaultCity?.name || 
+                             (farm.city && farm.state ? `${farm.city}, ${farm.state}` : farm.city) || 
+                             'São Paulo';
         const coords = settings.weather?.defaultCity || await searchCity(cityToSearch);
         
         if (coords) {
