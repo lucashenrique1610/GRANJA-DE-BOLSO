@@ -10,6 +10,7 @@ import {
   ThemeBorderRadius,
 } from '@/types';
 import { resolveThemePalette } from '@/lib/theme';
+import { useToast } from '@/components/ui/ToastProvider';
 
 interface PersonalizacaoPageProps {
   settings: SystemSettingsData;
@@ -63,16 +64,12 @@ export default function PersonalizacaoPage({
   onToggleDarkMode,
   onPreviewPaletteChange,
 }: PersonalizacaoPageProps) {
+  const toast = useToast();
   const [draft, setDraft] = useState<SystemSettingsData>(settings);
-  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     setDraft(settings);
   }, [settings]);
-
-  useEffect(() => {
-    if (errorMessage) setSuccessMessage('');
-  }, [errorMessage]);
 
   // Live preview: apply font & radius instantly
   useEffect(() => {
@@ -89,9 +86,8 @@ export default function PersonalizacaoPage({
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSuccessMessage('');
     await onSave(draft);
-    setSuccessMessage('Personalização atualizada com sucesso.');
+    toast.success('Personalização salva', 'As alterações visuais foram aplicadas à sua conta.');
   };
 
   const activePalette = resolveThemePalette(draft.selectedPalette, draft.customPaletteColor);
@@ -410,12 +406,6 @@ export default function PersonalizacaoPage({
         </SettingsSection>
 
         {/* ─── Save ────────────────────────────────────────────────────────── */}
-        {successMessage && (
-          <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700" style={{ borderRadius: 'var(--app-radius, 1rem)' }}>
-            {successMessage}
-          </div>
-        )}
-
         <div className="flex justify-end">
           <button
             type="submit"

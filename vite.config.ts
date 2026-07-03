@@ -1,14 +1,102 @@
+import dotenv from 'dotenv';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import adminPromoterAccessHandler from './api/admin/promoter-access.js';
+import adminUsersOverviewHandler from './api/admin/users-overview.js';
+import billingCreateCheckoutSessionHandler from './api/billing/create-checkout-session.js';
+import billingCreatePortalSessionHandler from './api/billing/create-portal-session.js';
+import billingSubscriptionStatusHandler from './api/billing/subscription-status.js';
+import stripeWebhookHandler from './api/stripe/webhook.js';
+import { handleOpenWeatherProxy } from './server/openweather-proxy.js';
+
+dotenv.config();
+
+function augmentNodeResponse(res: any) {
+  if (typeof res.status !== 'function') {
+    res.status = (code: number) => {
+      res.statusCode = code;
+      return res;
+    };
+  }
+
+  if (typeof res.json !== 'function') {
+    res.json = (payload: unknown) => {
+      if (!res.headersSent) {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      }
+      res.end(JSON.stringify(payload));
+      return res;
+    };
+  }
+
+  if (typeof res.send !== 'function') {
+    res.send = (payload: unknown) => {
+      if (typeof payload === 'object' && payload !== null && !Buffer.isBuffer(payload)) {
+        return res.json(payload);
+      }
+
+      res.end(payload);
+      return res;
+    };
+  }
+
+  return res;
+}
+
+function apiDevProxy() {
+  const apiRoutes = new Map<string, (req: any, res: any) => Promise<void>>([
+    ['/api/admin/promoter-access', adminPromoterAccessHandler],
+    ['/api/admin/users-overview', adminUsersOverviewHandler],
+    ['/api/billing/create-checkout-session', billingCreateCheckoutSessionHandler],
+    ['/api/billing/create-portal-session', billingCreatePortalSessionHandler],
+    ['/api/billing/subscription-status', billingSubscriptionStatusHandler],
+    ['/api/stripe/webhook', stripeWebhookHandler],
+  ]);
+
+  return {
+    name: 'api-dev-proxy',
+    configureServer(server: any) {
+      server.middlewares.use(async (req: any, res: any, next: any) => {
+        const requestPath = req.url ? req.url.split('?')[0] : '';
+
+        if (requestPath && apiRoutes.has(requestPath)) {
+          augmentNodeResponse(res);
+          await apiRoutes.get(requestPath)?.(req, res);
+          return;
+        }
+
+        if (!req.url?.startsWith('/api/weather/openweather')) {
+          next();
+          return;
+        }
+
+        if ((req.method || 'GET').toUpperCase() !== 'GET') {
+          res.statusCode = 405;
+          res.setHeader('Allow', 'GET');
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify({ error: 'Metodo nao permitido.' }));
+          return;
+        }
+
+        const { status, payload } = await handleOpenWeatherProxy(`http://localhost${req.url}`);
+        res.statusCode = status;
+        res.setHeader('Cache-Control', 'private, max-age=0');
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.end(JSON.stringify(payload));
+      });
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
     plugins: [
       react(), 
       tailwindcss(),
+      apiDevProxy(),
       VitePWA({
         registerType: 'prompt',
         useCredentials: true,
@@ -93,7 +181,7 @@ export default defineConfig(() => {
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
       headers: {
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co https://coresg-normal.trae.ai; connect-src 'self' https://*.supabase.co https://api.open-meteo.com https://geocoding-api.open-meteo.com https://api.bigdatacloud.net https://api.openweathermap.org https://generativelanguage.googleapis.com; frame-ancestors 'self'",
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://*.supabase.co https://coresg-normal.trae.ai; connect-src 'self' https://*.supabase.co https://api.open-meteo.com https://geocoding-api.open-meteo.com https://api.bigdatacloud.net https://generativelanguage.googleapis.com; frame-ancestors 'self'",
         'X-Frame-Options': 'SAMEORIGIN',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
@@ -102,7 +190,7 @@ export default defineConfig(() => {
     },
     preview: {
       headers: {
-        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' data: https://*.supabase.co https://coresg-normal.trae.ai; connect-src 'self' https://*.supabase.co https://api.open-meteo.com https://geocoding-api.open-meteo.com https://api.bigdatacloud.net https://api.openweathermap.org https://generativelanguage.googleapis.com; frame-ancestors 'self'",
+        'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https://*.supabase.co https://coresg-normal.trae.ai; connect-src 'self' https://*.supabase.co https://api.open-meteo.com https://geocoding-api.open-meteo.com https://api.bigdatacloud.net https://generativelanguage.googleapis.com; frame-ancestors 'self'",
         'X-Frame-Options': 'SAMEORIGIN',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'strict-origin-when-cross-origin',

@@ -8,14 +8,39 @@ export function downloadFile(fileName: string, content: string, mimeType: string
   URL.revokeObjectURL(url);
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function sanitizeSpreadsheetCell(value: string) {
+  const trimmedStart = value.trimStart();
+  if (/^[=+\-@]/.test(trimmedStart)) {
+    return `'${value}`;
+  }
+  return value;
+}
+
+function safeText(value: string | undefined | null) {
+  return escapeHtml(String(value ?? ''));
+}
+
+function safeSpreadsheetText(value: string | undefined | null) {
+  return escapeHtml(sanitizeSpreadsheetCell(String(value ?? '')));
+}
+
 export function exportRowsToExcel(fileName: string, headers: string[], rows: string[][]) {
   const table = `
     <table>
       <thead>
-        <tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr>
+        <tr>${headers.map((header) => `<th>${safeText(header)}</th>`).join('')}</tr>
       </thead>
       <tbody>
-        ${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell ?? ''}</td>`).join('')}</tr>`).join('')}
+        ${rows.map((row) => `<tr>${row.map((cell) => `<td>${safeSpreadsheetText(cell)}</td>`).join('')}</tr>`).join('')}
       </tbody>
     </table>
   `;
@@ -48,7 +73,7 @@ export function exportRowsToPdf(title: string, headers: string[], rows: string[]
   popup.document.write(`
     <html>
       <head>
-        <title>${title}</title>
+        <title>${safeText(title)}</title>
         <meta charset="utf-8" />
         <style>
           body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
@@ -60,11 +85,11 @@ export function exportRowsToPdf(title: string, headers: string[], rows: string[]
         </style>
       </head>
       <body>
-        <h1>${title}</h1>
-        <p>Exportado em ${new Date().toLocaleString('pt-BR')}</p>
+        <h1>${safeText(title)}</h1>
+        <p>Exportado em ${safeText(new Date().toLocaleString('pt-BR'))}</p>
         <table>
-          <thead><tr>${headers.map((header) => `<th>${header}</th>`).join('')}</tr></thead>
-          <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${cell ?? ''}</td>`).join('')}</tr>`).join('')}</tbody>
+          <thead><tr>${headers.map((header) => `<th>${safeText(header)}</th>`).join('')}</tr></thead>
+          <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${safeText(cell)}</td>`).join('')}</tr>`).join('')}</tbody>
         </table>
       </body>
     </html>

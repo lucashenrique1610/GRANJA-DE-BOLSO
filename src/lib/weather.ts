@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { supabase } from './supabase';
 import type { UnifiedWeatherData } from '@/types';
 
 // --- Types Internos ---
@@ -79,6 +80,29 @@ interface OpenWeatherResponse {
   visibility: number;
   name: string;
   clouds?: OpenWeatherClouds;
+}
+
+interface OpenWeatherForecastItem {
+  dt_txt: string;
+  main: {
+    temp: number;
+    temp_min: number;
+    temp_max: number;
+  };
+  weather: Array<{
+    id: number;
+  }>;
+}
+
+interface OpenWeatherForecastResponse {
+  list: OpenWeatherForecastItem[];
+}
+
+interface OpenWeatherProxyResponse {
+  currentData: OpenWeatherResponse;
+  forecastData: OpenWeatherForecastResponse;
+  locationName?: string;
+  error?: string;
 }
 
 // --- Helpers: Weather Code Mappings ---
@@ -209,48 +233,45 @@ async function fetchFromOpenMeteo(
   };
 }
 
-async function fetchFromOpenWeather(
+async function fetchFromOpenWeatherProxy(
   lat: number,
   lon: number,
-  locationName: string,
-  apiKey: string
+  locationName: string
 ): Promise<UnifiedWeatherData> {
-  if (!apiKey) {
-    throw new Error('OpenWeather API key not provided');
-  }
-
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const endpoint = new URL('/api/weather/openweather', window.location.origin);
+  endpoint.searchParams.set('lat', String(lat));
+  endpoint.searchParams.set('lon', String(lon));
+  endpoint.searchParams.set('locationName', locationName);
 
-  // Current Weather
-  const currentRes = await fetch(
-    `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&lang=pt_br`,
-    { signal: controller.signal }
-  );
+  const session = supabase ? await supabase.auth.getSession() : null;
+  const accessToken = session?.data.session?.access_token;
 
-  if (!currentRes.ok) {
-    throw new Error(`OpenWeather: HTTP Error ${currentRes.status}`);
-  }
-  const currentData: OpenWeatherResponse = await currentRes.json();
-
-  // Forecast (5 days every 3 hours)
-  const forecastRes = await fetch(
-    `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric&cnt=40`,
-    { signal: controller.signal }
-  );
+  const response = await fetch(endpoint.toString(), {
+    signal: controller.signal,
+    credentials: 'same-origin',
+    headers: accessToken
+      ? {
+          Authorization: `Bearer ${accessToken}`,
+        }
+      : undefined,
+  });
 
   clearTimeout(timeoutId);
 
-  if (!forecastRes.ok) {
-    throw new Error(`OpenWeather Forecast: HTTP Error ${forecastRes.status}`);
+  const payload = (await response.json()) as OpenWeatherProxyResponse;
+  if (!response.ok) {
+    throw new Error(payload.error || `OpenWeather proxy: HTTP Error ${response.status}`);
   }
-  const forecastData = await forecastRes.json();
+
+  const { currentData, forecastData, locationName: serverLocationName } = payload;
 
   // 12h forecast
   const forecast12h = forecastData.list
-    .filter((item: any) => new Date(item.dt_txt) > new Date())
+    .filter((item) => new Date(item.dt_txt) > new Date())
     .slice(0, 4) // 4 intervals of 3h = 12h
-    .map((item: any) => ({
+    .map((item) => ({
       time: new Date(item.dt_txt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       temperature: item.main.temp,
       weatherCode: mapOpenWeatherCodeToMeteo(item.weather[0].id),
@@ -296,7 +317,7 @@ async function fetchFromOpenWeather(
     cloudCover: currentData.clouds?.all || 0,
     forecast12h,
     forecast5d,
-    location: locationName || currentData.name,
+    location: serverLocationName || locationName || currentData.name,
     lastUpdated: new Date().toISOString(),
     source: 'openweather'
   };
@@ -307,23 +328,17 @@ async function fetchFromOpenWeather(
 export async function getWeatherData(
   lat: number,
   lon: number,
-  locationName: string,
-  settingsApiKey?: string
+  locationName: string
 ): Promise<UnifiedWeatherData> {
-  const openWeatherApiKey = import.meta.env.VITE_OPENWEATHER_API_KEY || settingsApiKey;
-
   try {
     return await fetchFromOpenMeteo(lat, lon, locationName);
   } catch (primaryErr) {
-    if (openWeatherApiKey) {
-      console.warn('[WeatherService] Open-Meteo failed, trying OpenWeather');
-      try {
-        return await fetchFromOpenWeather(lat, lon, locationName, openWeatherApiKey);
-      } catch (fallbackErr) {
-        throw new Error('Ambas fontes de dados meteorológicas falharam');
-      }
+    console.warn('[WeatherService] Open-Meteo failed, trying secure OpenWeather fallback');
+    try {
+      return await fetchFromOpenWeatherProxy(lat, lon, locationName);
+    } catch {
+      throw new Error('Ambas fontes de dados meteorológicas falharam');
     }
-    throw primaryErr;
   }
 }
 

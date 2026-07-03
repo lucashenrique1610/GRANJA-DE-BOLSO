@@ -23,6 +23,16 @@
   --transition-slow: 350ms ease;
 }
 
+@keyframes toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
 @media (min-width: 768px) {
   :root {
     --page-padding: 1.5rem;

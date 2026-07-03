@@ -8,6 +8,7 @@ import { FarmConfigData, FarmProfileData, OnboardingState, RegistrationCredentia
 import { resolveThemePalette } from '@/lib/theme';
 import AppShell from '@/components/AppShell';
 import LoginScreen from '@/components/LoginScreen';
+import MfaChallengeScreen from '@/components/MfaChallengeScreen';
 import OnboardingHero from '@/components/OnboardingHero';
 import PasswordRecoveryScreen from '@/components/PasswordRecoveryScreen';
 import StepColorCustomize from '@/components/StepColorCustomize';
@@ -18,19 +19,24 @@ import PWAInstallBanner from '@/components/PWAInstallBanner';
 import PWAUpdateBanner from '@/components/PWAUpdateBanner';
 import {
   createMyGranja,
+  getAuthSecurityStatus,
   getMyLatestGranja,
   getMyUser,
   isSupabaseConfigured,
+  setBillingAccessState,
   signOut,
   signUpWithEmail,
+  startMyTrial15Days,
   supabase,
   supabaseConfigIssue,
   updateMyGranja,
   upsertMyUser,
+  verifyTotpMfa,
 } from '@/lib/supabase';
 
 const LOCAL_STORAGE_KEY = 'granjadebolso_onboarding_state';
 const DARK_MODE_STORAGE_KEY = 'granjadebolso_dark_mode';
+const IDLE_LOGOUT_MS = 30 * 60 * 1000;
 
 const initialDefaultState: OnboardingState = {
   step: 0,
@@ -127,8 +133,13 @@ export default function App() {
   const [loginNotice, setLoginNotice] = useState('');
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [mfaChallenge, setMfaChallenge] = useState<{ factorId: string; friendlyName: string; email: string | null } | null>(null);
+  const [mfaError, setMfaError] = useState('');
+  const [isMfaSubmitting, setIsMfaSubmitting] = useState(false);
   const appStateRef = useRef(appState);
   const pendingSignupPasswordRef = useRef('');
+  const lastHydratedSessionKeyRef = useRef<string | null>(null);
+  const lastAuthStateRef = useRef<string | null>(null);
 
   useEffect(() => {
     appStateRef.current = appState;
@@ -136,6 +147,18 @@ export default function App() {
 
   const clearPendingSignupPassword = useCallback(() => {
     pendingSignupPasswordRef.current = '';
+  }, []);
+
+  const clearAuthenticatedClientState = useCallback(() => {
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+    } catch (e) {
+      console.error('Failed to clear local storage state:', e);
+    }
+
+    setBillingAccessState({ allowed: true, reason: 'signed_out' });
+    appStateRef.current = initialDefaultState;
+    setAppState(initialDefaultState);
   }, []);
 
   const sanitizeForStorage = (state: OnboardingState): OnboardingState => {
@@ -192,8 +215,36 @@ export default function App() {
     });
   };
 
+  const refreshMfaRequirement = useCallback(async () => {
+    if (!isSupabaseConfigured || !supabase) {
+      setMfaChallenge(null);
+      setMfaError('');
+      return;
+    }
+
+    try {
+      const status = await getAuthSecurityStatus();
+      const verifiedFactor = status.verifiedTotpFactors[0] || null;
+      if (verifiedFactor && status.currentLevel !== 'aal2') {
+        setMfaChallenge({
+          factorId: verifiedFactor.id,
+          friendlyName: verifiedFactor.friendlyName,
+          email: status.email,
+        });
+      } else {
+        setMfaChallenge(null);
+        setMfaError('');
+      }
+    } catch (error) {
+      console.warn('Falha ao avaliar requisito de MFA:', error);
+      setMfaChallenge(null);
+      setMfaError('');
+    }
+  }, []);
+
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
+    let isActive = true;
 
     const syncOnboardingToSupabase = async (state: OnboardingState, emailOverride?: string) => {
       const email = (emailOverride ?? state.personal.email).trim();
@@ -224,6 +275,8 @@ export default function App() {
         ? await updateMyGranja(existingGranja.id, granjaPayload)
         : await createMyGranja(granjaPayload);
 
+      await startMyTrial15Days();
+
       return { user, granja };
     };
 
@@ -247,6 +300,12 @@ export default function App() {
           granja = synced.granja;
         }
 
+        if (!isActive) {
+          return;
+        }
+
+        const shouldEnterApp = Boolean(granja || user?.app_role === 'admin');
+
         saveState((prev) => {
           const nextPalette =
             granja?.selected_palette
@@ -255,7 +314,7 @@ export default function App() {
 
           const nextState: OnboardingState = {
             ...prev,
-            step: granja ? 5 : getPendingOnboardingStep(prev),
+            step: shouldEnterApp ? 5 : getPendingOnboardingStep(prev),
             personal: {
               ...prev.personal,
               fullName: user?.full_name || prev.personal.fullName,
@@ -296,7 +355,7 @@ export default function App() {
             },
           };
 
-          return granja
+          return shouldEnterApp
             ? nextState
             : {
                 ...nextState,
@@ -304,46 +363,74 @@ export default function App() {
               };
         });
 
-        if (granja) {
+        if (!isActive) {
+          return;
+        }
+
+        if (shouldEnterApp) {
           setLoginNotice('');
         } else {
           setLoginNotice('Sua conta foi autenticada, mas a granja inicial ainda não foi salva. Finalize o cadastro para continuar.');
         }
+        await refreshMfaRequirement();
       } catch (e: any) {
         console.warn('Falha ao carregar dados do Supabase, continuando com dados locais:', e);
         // Even if there's an error, don't crash the app! Continue with local state!
       }
     };
 
-    supabase.auth.getSession().then(({ data }) => {
-      const session = data.session;
-      if (session?.user?.email) {
-        hydrateFromSession(session.user.email);
-      } else {
-        setIsPasswordRecovery(false);
-        saveState((prev) => (prev.step === 5 ? { ...prev, step: 0 } : prev));
+    const clearSessionState = () => {
+      if (!isActive) {
+        return;
       }
-    });
+
+      setIsPasswordRecovery(false);
+      setMfaChallenge(null);
+      setMfaError('');
+      if (appStateRef.current.step === 5) {
+        clearAuthenticatedClientState();
+      }
+    };
 
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
+        lastAuthStateRef.current = event;
         setIsPasswordRecovery(true);
         setLoginNotice('');
         return;
       }
+
       if (session?.user?.email) {
+        const sessionKey = `${session.user.id}:${session.access_token ?? 'no-token'}`;
+        const shouldSkipHydration =
+          (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') &&
+          lastHydratedSessionKeyRef.current === sessionKey;
+
+        lastAuthStateRef.current = event;
+        if (shouldSkipHydration) {
+          return;
+        }
+
+        lastHydratedSessionKeyRef.current = sessionKey;
         setLoginNotice('');
-        hydrateFromSession(session.user.email);
-      } else {
-        setIsPasswordRecovery(false);
-        saveState((prev) => (prev.step === 5 ? { ...prev, step: 0 } : prev));
+        void hydrateFromSession(session.user.email);
+        return;
       }
+
+      if (lastAuthStateRef.current === 'SIGNED_OUT') {
+        return;
+      }
+
+      lastAuthStateRef.current = 'SIGNED_OUT';
+      lastHydratedSessionKeyRef.current = null;
+      clearSessionState();
     });
 
     return () => {
+      isActive = false;
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [clearAuthenticatedClientState, refreshMfaRequirement]);
 
   // Immediate live theme sync
   useEffect(() => {
@@ -482,6 +569,8 @@ export default function App() {
         await createMyGranja(granjaPayload);
       }
 
+      await startMyTrial15Days();
+
       saveState((prev) => ({ ...prev, step: 5 }));
     } catch (e: any) {
       const message = typeof e?.message === 'string' ? e.message : '';
@@ -501,7 +590,22 @@ export default function App() {
     setLoginNotice('');
   };
 
-  const handlePasswordRecovered = async () => {
+  const handleMfaVerify = async (code: string) => {
+    if (!mfaChallenge) return;
+
+    try {
+      setIsMfaSubmitting(true);
+      setMfaError('');
+      await verifyTotpMfa(mfaChallenge.factorId, code);
+      await refreshMfaRequirement();
+    } catch (error: any) {
+      setMfaError(error?.message || 'Nao foi possivel validar o segundo fator.');
+    } finally {
+      setIsMfaSubmitting(false);
+    }
+  };
+
+  const handlePasswordRecovered = useCallback(async () => {
     try {
       if (isSupabaseConfigured) {
         await signOut();
@@ -509,13 +613,16 @@ export default function App() {
     } catch (e) {
       console.error('Falha ao encerrar sessao de recuperacao:', e);
     } finally {
+      clearAuthenticatedClientState();
       setIsPasswordRecovery(false);
+      setMfaChallenge(null);
+      setMfaError('');
       setLoginNotice('Senha redefinida com sucesso. Entre com a nova senha.');
-      saveState((prev) => ({ ...prev, step: -1 }));
+      setAppState((prev) => ({ ...initialDefaultState, step: -1, selectedPalette: prev.selectedPalette, systemSettings: prev.systemSettings }));
     }
-  };
+  }, [clearAuthenticatedClientState]);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async (reason?: string) => {
     try {
       if (isSupabaseConfigured) {
         await signOut();
@@ -524,10 +631,49 @@ export default function App() {
       console.error('Falha ao sair:', e);
     } finally {
       clearPendingSignupPassword();
+      clearAuthenticatedClientState();
       setIsPasswordRecovery(false);
-      saveState((prev) => ({ ...prev, step: 0 }));
+      setMfaChallenge(null);
+      setMfaError('');
+      setLoginNotice(reason || '');
     }
-  };
+  }, [clearAuthenticatedClientState, clearPendingSignupPassword]);
+
+  useEffect(() => {
+    if (appState.step !== 5) {
+      return;
+    }
+
+    let timeoutId = 0;
+
+    const resetIdleTimer = () => {
+      window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        void handleLogout('Sua sessão foi encerrada por inatividade. Faça login novamente.');
+      }, IDLE_LOGOUT_MS);
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        resetIdleTimer();
+      }
+    };
+
+    const events: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'mousemove', 'scroll', 'touchstart'];
+    events.forEach((eventName) => {
+      window.addEventListener(eventName, resetIdleTimer, { passive: true });
+    });
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    resetIdleTimer();
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      events.forEach((eventName) => {
+        window.removeEventListener(eventName, resetIdleTimer);
+      });
+    };
+  }, [appState.step, handleLogout]);
 
   const handleReset = () => {
     clearPendingSignupPassword();
@@ -648,16 +794,27 @@ export default function App() {
       )}
 
       {!isPasswordRecovery && appState.step === 5 && (
-        <AppShell
-          appState={appState}
-          onLogout={handleLogout}
-          isDarkMode={isDarkMode}
-          onToggleDarkMode={handleToggleDarkMode}
-          onUpdatePersonalProfile={handlePersonalProfileUpdate}
-          onUpdateFarmProfile={handleFarmProfileUpdate}
-          onUpdateSystemSettings={handleSystemSettingsUpdate}
-          onPreviewSystemPaletteChange={handleSystemPalettePreview}
-        />
+        mfaChallenge ? (
+          <MfaChallengeScreen
+            email={mfaChallenge.email}
+            factorName={mfaChallenge.friendlyName}
+            errorMessage={mfaError}
+            isSubmitting={isMfaSubmitting}
+            onVerify={handleMfaVerify}
+            onLogout={handleLogout}
+          />
+        ) : (
+          <AppShell
+            appState={appState}
+            onLogout={handleLogout}
+            isDarkMode={isDarkMode}
+            onToggleDarkMode={handleToggleDarkMode}
+            onUpdatePersonalProfile={handlePersonalProfileUpdate}
+            onUpdateFarmProfile={handleFarmProfileUpdate}
+            onUpdateSystemSettings={handleSystemSettingsUpdate}
+            onPreviewSystemPaletteChange={handleSystemPalettePreview}
+          />
+        )
       )}
 
       {/* PWA Banners — visíveis em todas as telas */}

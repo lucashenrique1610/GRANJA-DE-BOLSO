@@ -6,6 +6,14 @@ coverage/
 *.log
 .env*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+secrets.*
+credentials.*
 
 # Auto-generated entries
 # Dependencies
@@ -41,8 +49,6 @@ Thumbs.db
 
 # Sensitive files (auto-detected)
 .env
-.env.example
 .env.local
 dist
 node_modules
-

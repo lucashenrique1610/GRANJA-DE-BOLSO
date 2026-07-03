@@ -26,6 +26,32 @@ import {
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY || '';
 
+export interface AuthSecurityFactorSummary {
+  id: string;
+  friendlyName: string;
+  factorType: string;
+  status: string;
+  createdAt?: string;
+}
+
+export interface AuthSecurityStatus {
+  email: string | null;
+  emailConfirmed: boolean;
+  emailConfirmedAt: string | null;
+  currentLevel: string | null;
+  nextLevel: string | null;
+  factors: AuthSecurityFactorSummary[];
+  verifiedTotpFactors: AuthSecurityFactorSummary[];
+}
+
+export interface TotpEnrollment {
+  factorId: string;
+  friendlyName: string;
+  qrCodeSvg: string;
+  secret: string;
+  uri: string;
+}
+
 function isServiceRoleKey(key: string) {
   try {
     const parts = key.split('.');
@@ -47,12 +73,18 @@ export const isSupabaseConfigured = supabaseConfigIssue === null;
 
 export const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseAnonKey) : null;
 
+let billingAccessState = {
+  allowed: true,
+  reason: 'init',
+};
+
 export interface SupabaseUserRow {
   id: string;
   created_at?: string;
   full_name: string;
   email: string;
   phone?: string | null;
+  app_role?: 'usuario' | 'moderador' | 'admin';
 }
 
 export interface SupabaseGranjaRow {
@@ -691,6 +723,71 @@ function normalizeBackupSnapshot(snapshot: BackupSnapshot): BackupSnapshot {
   };
 }
 
+const BACKUP_COLLECTION_KEYS = [
+  'animals',
+  'clients',
+  'suppliers',
+  'galpoes',
+  'healthProfessionals',
+  'healthRecords',
+  'veterinaryStock',
+  'mortalityRecords',
+  'manejoRecords',
+  'disponibilidadeVenda',
+  'vendas',
+  'ingredients',
+  'formulations',
+  'formulatedFeedStock',
+] as const;
+
+function isValidDateValue(value: string) {
+  return !Number.isNaN(new Date(value).getTime());
+}
+
+function validateBackupSnapshot(snapshot: BackupSnapshot): BackupSnapshot {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+    throw new Error('Arquivo de backup inválido. Estrutura principal não reconhecida.');
+  }
+
+  if (snapshot.version !== 1) {
+    throw new Error('Versão de backup não suportada. Gere um novo backup antes de restaurar.');
+  }
+
+  if (!snapshot.exportedAt || !isValidDateValue(snapshot.exportedAt)) {
+    throw new Error('Arquivo de backup inválido. Data de exportação ausente ou corrompida.');
+  }
+
+  const normalized = normalizeBackupSnapshot(snapshot);
+
+  if (!normalized.personal.email.trim()) {
+    throw new Error('Arquivo de backup inválido. Email do proprietário não foi encontrado.');
+  }
+
+  if (!normalized.farmProfile.farmName.trim()) {
+    throw new Error('Arquivo de backup inválido. Nome da granja não foi encontrado.');
+  }
+
+  let totalRecords = 0;
+  for (const key of BACKUP_COLLECTION_KEYS) {
+    const records = normalized[key];
+    if (!Array.isArray(records)) {
+      throw new Error(`Arquivo de backup inválido. A coleção "${key}" está corrompida.`);
+    }
+
+    if (records.length > 10000) {
+      throw new Error(`Arquivo de backup inválido. A coleção "${key}" excede o limite de segurança.`);
+    }
+
+    totalRecords += records.length;
+  }
+
+  if (totalRecords > 50000) {
+    throw new Error('Arquivo de backup inválido. O volume total de registros excede o limite de segurança.');
+  }
+
+  return normalized;
+}
+
 export function getBackupAutomationSettingsFromGranja(granja: SupabaseGranjaRow | null): BackupAutomationSettings {
   return {
     enabled: Boolean(granja?.auto_backup_enabled),
@@ -715,6 +812,7 @@ function mapBackupRow(row: SupabaseBackupRow): BackupRecord {
 }
 
 async function getAuthenticatedUserAndGranja(requireGranja = true) {
+  assertBillingAccess();
   const sb = requireSupabase();
   const { data: userData, error: userError } = await sb.auth.getUser();
   if (userError) throw userError;
@@ -748,6 +846,21 @@ function requireSupabase() {
   return supabase;
 }
 
+export function setBillingAccessState(nextState: { allowed: boolean; reason?: string }) {
+  billingAccessState = {
+    allowed: nextState.allowed,
+    reason: nextState.reason || 'unknown',
+  };
+}
+
+function assertBillingAccess() {
+  if (billingAccessState.allowed) {
+    return;
+  }
+
+  throw new Error('Seu acesso ao aplicativo está bloqueado. Escolha um plano na seção Assinatura para continuar.');
+}
+
 export async function signUpWithEmail(
   email: string,
   password: string,
@@ -775,9 +888,16 @@ export async function signUpWithEmail(
           password,
           options: {
             data: normalizedMetadata,
+            emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
           },
         }
-      : { email: normalizedEmail, password };
+      : {
+          email: normalizedEmail,
+          password,
+          options: {
+            emailRedirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+          },
+        };
 
   const { data, error } = await sb.auth.signUp(signUpPayload);
   if (error) throw error;
@@ -787,6 +907,21 @@ export async function signUpWithEmail(
 export async function signInWithEmail(email: string, password: string) {
   const sb = requireSupabase();
   const { data, error } = await sb.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+  if (error) throw error;
+  return data;
+}
+
+export async function resendSignupConfirmationEmail(email: string) {
+  const sb = requireSupabase();
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) throw new Error('Informe o e-mail para reenviar a confirmação.');
+
+  const emailRedirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+  const { data, error } = await sb.auth.resend({
+    type: 'signup',
+    email: normalizedEmail,
+    options: emailRedirectTo ? { emailRedirectTo } : undefined,
+  });
   if (error) throw error;
   return data;
 }
@@ -819,10 +954,95 @@ export async function updateCurrentUserPassword(password: string, context: Passw
   if (error) throw error;
   return data;
 }
+
+function mapFactorSummary(factor: any): AuthSecurityFactorSummary {
+  return {
+    id: factor.id,
+    friendlyName: factor.friendly_name || 'Aplicativo autenticador',
+    factorType: factor.factor_type || factor.factorType || 'unknown',
+    status: factor.status || 'unknown',
+    createdAt: factor.created_at,
+  };
+}
+
+export async function getAuthSecurityStatus(): Promise<AuthSecurityStatus> {
+  const sb = requireSupabase();
+  const [{ data: userData, error: userError }, { data: factorsData, error: factorsError }, { data: aalData, error: aalError }] =
+    await Promise.all([
+      sb.auth.getUser(),
+      sb.auth.mfa.listFactors(),
+      sb.auth.mfa.getAuthenticatorAssuranceLevel(),
+    ]);
+
+  if (userError) throw userError;
+  if (factorsError) throw factorsError;
+  if (aalError) throw aalError;
+
+  const user = userData.user;
+  const allFactors = (factorsData?.all ?? []).map(mapFactorSummary);
+  const verifiedTotpFactors = allFactors.filter((factor) => factor.factorType === 'totp' && factor.status === 'verified');
+  const emailConfirmedAt = user?.email_confirmed_at || (user as any)?.confirmed_at || null;
+
+  return {
+    email: user?.email ?? null,
+    emailConfirmed: Boolean(emailConfirmedAt),
+    emailConfirmedAt,
+    currentLevel: aalData?.currentLevel ?? null,
+    nextLevel: aalData?.nextLevel ?? null,
+    factors: allFactors,
+    verifiedTotpFactors,
+  };
+}
+
+export async function enrollTotpMfa(friendlyName = 'Granja de Bolso') {
+  const sb = requireSupabase();
+  const { data, error } = await sb.auth.mfa.enroll({
+    factorType: 'totp',
+    friendlyName,
+  });
+
+  if (error) throw error;
+
+  return {
+    factorId: data.id,
+    friendlyName: data.friendly_name || friendlyName,
+    qrCodeSvg: data.totp.qr_code,
+    secret: data.totp.secret,
+    uri: data.totp.uri,
+  } satisfies TotpEnrollment;
+}
+
+export async function verifyTotpMfa(factorId: string, code: string) {
+  const sb = requireSupabase();
+  const normalizedCode = code.trim();
+  if (!normalizedCode) throw new Error('Informe o código do aplicativo autenticador.');
+
+  const { data, error } = await sb.auth.mfa.challengeAndVerify({
+    factorId,
+    code: normalizedCode,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function unenrollMfaFactor(factorId: string) {
+  const sb = requireSupabase();
+  const { data, error } = await sb.auth.mfa.unenroll({ factorId });
+  if (error) throw error;
+  return data;
+}
+
 export async function signOut() {
   const sb = requireSupabase();
   const { error } = await sb.auth.signOut();
   if (error) throw error;
+}
+
+export async function startMyTrial15Days() {
+  const sb = requireSupabase();
+  const { data, error } = await sb.rpc('start_my_trial_15_days');
+  if (error) throw error;
+  return data;
 }
 
 
@@ -2325,7 +2545,7 @@ export async function restoreMyBackupSnapshot(snapshot: BackupSnapshot) {
   if (userError) throw userError;
   if (!userData.user) throw new Error('Usuário não autenticado.');
 
-  const normalized = normalizeBackupSnapshot(snapshot);
+  const normalized = validateBackupSnapshot(snapshot);
 
   await upsertMyUser({
     full_name: normalized.personal.fullName,

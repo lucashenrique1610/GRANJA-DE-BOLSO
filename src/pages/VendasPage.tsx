@@ -11,6 +11,7 @@ import {
   ManejoRecord,
 } from '@/types';
 import { getAnimalLabel } from '@/lib/manejo';
+import { useToast } from '@/components/ui/ToastProvider';
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -71,6 +72,7 @@ export default function VendasPage({
   errorMessage,
   onRetry,
 }: VendasPageProps) {
+  const toast = useToast();
   const [activeSection, setActiveSection] = useState<'form' | 'history'>('form');
   const [editingVendaId, setEditingVendaId] = useState<string | null>(null);
   const [vendaDraft, setVendaDraft] = useState<Omit<VendaRecord, 'id' | 'createdAt'>>(emptyVendaDraft);
@@ -155,21 +157,22 @@ export default function VendasPage({
     e.preventDefault();
 
     if (!vendaDraft.clientId) {
-      window.alert('Selecione um cliente.');
+      toast.warning('Cliente obrigatório', 'Selecione um cliente para continuar a venda.');
       return;
     }
     if (!vendaDraft.lote) {
-      window.alert('Selecione um lote.');
+      toast.warning('Lote obrigatório', 'Selecione um lote para registrar a venda.');
       return;
     }
     if (vendaDraft.quantidade <= 0) {
-      window.alert('A quantidade deve ser maior que zero.');
+      toast.warning('Quantidade inválida', 'A quantidade precisa ser maior que zero.');
       return;
     }
 
     if (vendaDraft.quantidade > currentStock[vendaDraft.produto]) {
-      window.alert(
-        `Estoque insuficiente! Você tem ${currentStock[vendaDraft.produto]} ${PRODUTO_LABELS[vendaDraft.produto]} disponíveis.`
+      toast.error(
+        'Estoque insuficiente',
+        `Você tem ${currentStock[vendaDraft.produto]} ${PRODUTO_LABELS[vendaDraft.produto]} disponíveis.`,
       );
       return;
     }

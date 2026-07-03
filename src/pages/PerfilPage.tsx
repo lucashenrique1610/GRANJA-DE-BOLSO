@@ -1,6 +1,16 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { FarmProfileData, THEME_PALETTES, UserPersonalData } from '@/types';
 import { resolveThemePalette } from '@/lib/theme';
+import {
+  enrollTotpMfa,
+  getAuthSecurityStatus,
+  resendSignupConfirmationEmail,
+  type AuthSecurityStatus,
+  type TotpEnrollment,
+  unenrollMfaFactor,
+  verifyTotpMfa,
+} from '@/lib/supabase';
+import { useToast } from '@/components/ui/ToastProvider';
 
 type PersonalProfileInput = Omit<UserPersonalData, 'password'>;
 
@@ -38,10 +48,17 @@ export default function PerfilPage({
   onSavePersonal,
   onSaveFarm,
 }: PerfilPageProps) {
+  const toast = useToast();
   const [personalDraft, setPersonalDraft] = useState<PersonalProfileInput>(personal);
   const [farmDraft, setFarmDraft] = useState<FarmProfileData>(farm);
-  const [personalSuccess, setPersonalSuccess] = useState('');
-  const [farmSuccess, setFarmSuccess] = useState('');
+  const [securityStatus, setSecurityStatus] = useState<AuthSecurityStatus | null>(null);
+  const [isSecurityLoading, setIsSecurityLoading] = useState(true);
+  const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
+  const [isEnrollingMfa, setIsEnrollingMfa] = useState(false);
+  const [isVerifyingMfa, setIsVerifyingMfa] = useState(false);
+  const [isRemovingMfa, setIsRemovingMfa] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+  const [pendingEnrollment, setPendingEnrollment] = useState<TotpEnrollment | null>(null);
 
   useEffect(() => {
     setPersonalDraft(personal);
@@ -51,12 +68,21 @@ export default function PerfilPage({
     setFarmDraft(farm);
   }, [farm]);
 
-  useEffect(() => {
-    if (errorMessage) {
-      setPersonalSuccess('');
-      setFarmSuccess('');
+  const loadSecurityStatus = useCallback(async () => {
+    try {
+      setIsSecurityLoading(true);
+      const nextStatus = await getAuthSecurityStatus();
+      setSecurityStatus(nextStatus);
+    } catch (error: any) {
+      toast.error('Falha ao carregar segurança', error?.message || 'Nao foi possivel carregar o status de seguranca da conta.');
+    } finally {
+      setIsSecurityLoading(false);
     }
-  }, [errorMessage]);
+  }, [toast]);
+
+  useEffect(() => {
+    void loadSecurityStatus();
+  }, [loadSecurityStatus]);
 
   const summary = useMemo(
     () => [
@@ -69,18 +95,16 @@ export default function PerfilPage({
 
   const handlePersonalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setPersonalSuccess('');
     await onSavePersonal({
       fullName: personalDraft.fullName.trim(),
       email: personalDraft.email.trim(),
       phone: personalDraft.phone.trim(),
     });
-    setPersonalSuccess('Perfil pessoal atualizado com sucesso.');
+    toast.success('Perfil pessoal salvo', 'Seus dados principais foram atualizados com sucesso.');
   };
 
   const handleFarmSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setFarmSuccess('');
     await onSaveFarm({
       ...farmDraft,
       farmName: farmDraft.farmName.trim(),
@@ -88,7 +112,72 @@ export default function PerfilPage({
       city: farmDraft.city.trim(),
       marketingSource: farmDraft.marketingSource.trim(),
     });
-    setFarmSuccess('Perfil da granja atualizado com sucesso.');
+    toast.success('Perfil da granja salvo', 'As informações da granja foram atualizadas com sucesso.');
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!securityStatus?.email) return;
+
+    try {
+      setIsResendingConfirmation(true);
+      await resendSignupConfirmationEmail(securityStatus.email);
+      toast.success('Confirmação reenviada', 'Verifique sua caixa de entrada e a pasta de spam.');
+    } catch (error: any) {
+      toast.error('Falha ao reenviar confirmação', error?.message || 'Nao foi possivel reenviar a confirmação de e-mail.');
+    } finally {
+      setIsResendingConfirmation(false);
+    }
+  };
+
+  const handleEnrollMfa = async () => {
+    try {
+      setIsEnrollingMfa(true);
+      setVerificationCode('');
+      const enrollment = await enrollTotpMfa('Granja de Bolso');
+      setPendingEnrollment(enrollment);
+      toast.info('MFA iniciado', 'Escaneie o QR Code no aplicativo autenticador e confirme com o código de 6 dígitos.', 6500);
+      await loadSecurityStatus();
+    } catch (error: any) {
+      toast.error('Falha ao ativar MFA', error?.message || 'Nao foi possivel iniciar o cadastro do MFA.');
+    } finally {
+      setIsEnrollingMfa(false);
+    }
+  };
+
+  const handleVerifyEnrollment = async () => {
+    if (!pendingEnrollment) return;
+
+    try {
+      setIsVerifyingMfa(true);
+      await verifyTotpMfa(pendingEnrollment.factorId, verificationCode);
+      setPendingEnrollment(null);
+      setVerificationCode('');
+      toast.success('MFA ativado', 'No próximo acesso, o sistema passará a exigir o segundo fator.');
+      await loadSecurityStatus();
+    } catch (error: any) {
+      toast.error('Falha ao validar MFA', error?.message || 'Nao foi possivel validar o codigo do aplicativo autenticador.');
+    } finally {
+      setIsVerifyingMfa(false);
+    }
+  };
+
+  const handleUnenrollFactor = async (factorId: string) => {
+    if (!window.confirm('Deseja realmente remover este fator MFA? O proximo login voltara a depender apenas da senha.')) {
+      return;
+    }
+
+    try {
+      setIsRemovingMfa(true);
+      await unenrollMfaFactor(factorId);
+      setPendingEnrollment(null);
+      setVerificationCode('');
+      toast.success('MFA removido', 'O próximo login voltará a depender apenas da senha.');
+      await loadSecurityStatus();
+    } catch (error: any) {
+      toast.error('Falha ao remover MFA', error?.message || 'Nao foi possivel remover o fator MFA.');
+    } finally {
+      setIsRemovingMfa(false);
+    }
   };
 
   return (
@@ -165,12 +254,6 @@ export default function PerfilPage({
               />
             </label>
           </div>
-
-          {personalSuccess && (
-            <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-              {personalSuccess}
-            </div>
-          )}
 
           <div className="flex justify-end">
             <button
@@ -294,12 +377,6 @@ export default function PerfilPage({
             </label>
           </div>
 
-          {farmSuccess && (
-            <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-              {farmSuccess}
-            </div>
-          )}
-
           <div className="flex justify-end">
             <button
               type="submit"
@@ -310,6 +387,150 @@ export default function PerfilPage({
             </button>
           </div>
         </form>
+      </section>
+
+      <section className="app-section-card space-y-5">
+        <div>
+          <h2 className="text-lg font-extrabold text-[#0f1c2b]">Segurança da conta</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            O hash da senha é gerenciado pelo Supabase Auth. Aqui você valida confirmação de e-mail e segundo fator TOTP para manter o modelo zero-knowledge.
+          </p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <SummaryCard
+            label="E-mail confirmado"
+            value={securityStatus?.emailConfirmed ? 'Sim' : isSecurityLoading ? 'Carregando...' : 'Pendente'}
+          />
+          <SummaryCard
+            label="MFA TOTP"
+            value={securityStatus?.verifiedTotpFactors.length ? 'Ativo' : isSecurityLoading ? 'Carregando...' : 'Inativo'}
+          />
+          <SummaryCard
+            label="Nível AAL"
+            value={securityStatus?.currentLevel?.toUpperCase() || (isSecurityLoading ? 'Carregando...' : 'AAL1')}
+          />
+        </div>
+
+        {!securityStatus?.emailConfirmed && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4">
+            <p className="text-sm font-semibold text-amber-900">Confirmação de e-mail pendente.</p>
+            <p className="mt-1 text-xs text-amber-800">
+              Enquanto o e-mail nao estiver confirmado, a conta continua dependente do fluxo de verificação enviado pelo Supabase.
+            </p>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={handleResendConfirmation}
+                disabled={isResendingConfirmation || !securityStatus?.email}
+                className="rounded-full border border-amber-300 bg-white px-4 py-2 text-xs font-bold text-amber-900 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isResendingConfirmation ? 'Reenviando confirmação...' : 'Reenviar e-mail de confirmação'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-sm font-extrabold text-[#0f1c2b]">Autenticação multifator TOTP</h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Depois de configurado e verificado, o app passa a exigir o código do autenticador antes de liberar o acesso completo.
+              </p>
+            </div>
+            {!pendingEnrollment && securityStatus && securityStatus.verifiedTotpFactors.length === 0 && (
+              <button
+                type="button"
+                onClick={handleEnrollMfa}
+                disabled={isEnrollingMfa}
+                className="rounded-full bg-brand-primary px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isEnrollingMfa ? 'Preparando MFA...' : 'Ativar MFA'}
+              </button>
+            )}
+          </div>
+
+          {securityStatus?.verifiedTotpFactors.length ? (
+            <div className="mt-4 space-y-3">
+              {securityStatus.verifiedTotpFactors.map((factor) => (
+                <div key={factor.id} className="flex flex-col gap-3 rounded-2xl border border-green-200 bg-white px-4 py-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-[#0f1c2b]">{factor.friendlyName}</p>
+                    <p className="text-xs text-gray-500">
+                      Tipo: {factor.factorType.toUpperCase()} • Status: {factor.status} • Criado em {factor.createdAt ? new Date(factor.createdAt).toLocaleString('pt-BR') : 'data indisponível'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleUnenrollFactor(factor.id)}
+                    disabled={isRemovingMfa}
+                    className="rounded-full border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-700 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isRemovingMfa ? 'Removendo...' : 'Remover MFA'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {pendingEnrollment && (
+            <div className="mt-4 space-y-4 rounded-2xl border border-blue-200 bg-white p-4">
+              <div>
+                <p className="text-sm font-semibold text-[#0f1c2b]">Passo 1: escaneie o QR Code</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  Use Google Authenticator, Microsoft Authenticator, 1Password ou outro aplicativo TOTP.
+                </p>
+              </div>
+
+              <div className="flex justify-center rounded-2xl border border-dashed border-blue-200 bg-slate-50 p-4">
+                <div
+                  className="h-52 w-52 [&_svg]:h-full [&_svg]:w-full"
+                  dangerouslySetInnerHTML={{ __html: pendingEnrollment.qrCodeSvg }}
+                />
+              </div>
+
+              <div className="rounded-2xl border border-gray-200 bg-slate-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Chave secreta manual</p>
+                <p className="mt-2 break-all font-mono text-sm text-[#0f1c2b]">{pendingEnrollment.secret}</p>
+              </div>
+
+              <label className="space-y-2">
+                <span className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Passo 2: informe o código de 6 dígitos</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={verificationCode}
+                  onChange={(event) => setVerificationCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none transition-colors focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+                  placeholder="000000"
+                />
+              </label>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={handleVerifyEnrollment}
+                  disabled={verificationCode.length !== 6 || isVerifyingMfa}
+                  className="rounded-full bg-brand-primary px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isVerifyingMfa ? 'Validando...' : 'Confirmar MFA'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingEnrollment(null);
+                    setVerificationCode('');
+                  }}
+                  className="rounded-full border border-gray-300 bg-white px-5 py-3 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Edit3, Plus, Search, Trash2, X } from 'lucide-react';
 import { AnimalRecord, PurchaseCategory, PurchasePaymentStatus, PurchaseRecord, SupplierRecord } from '@/types';
+import { useToast } from '@/components/ui/ToastProvider';
 
 interface ComprasPageProps {
   records: PurchaseRecord[];
@@ -243,6 +244,7 @@ export default function ComprasPage({
   errorMessage,
   onRetry,
 }: ComprasPageProps) {
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Omit<PurchaseRecord, 'id' | 'createdAt'>>(emptyPurchaseRecord);
@@ -377,7 +379,7 @@ export default function ComprasPage({
     event.preventDefault();
     const validationMessage = validateDraft();
     if (validationMessage) {
-      window.alert(validationMessage);
+      toast.warning('Revise os dados da compra', validationMessage);
       return;
     }
 

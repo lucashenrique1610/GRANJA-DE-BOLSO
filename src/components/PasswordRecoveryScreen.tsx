@@ -4,15 +4,17 @@
  */
 
 import React, { useState } from 'react';
-import { AlertCircle, Check, Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
+import { Check, Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 import { validatePasswordPolicy } from '@/lib/passwordSecurity';
 import { updateCurrentUserPassword } from '@/lib/supabase';
+import { useToast } from '@/components/ui/ToastProvider';
 
 interface PasswordRecoveryScreenProps {
   onRecovered: () => void;
 }
 
 export default function PasswordRecoveryScreen({ onRecovered }: PasswordRecoveryScreenProps) {
+  const toast = useToast();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -25,12 +27,16 @@ export default function PasswordRecoveryScreen({ onRecovered }: PasswordRecovery
     setErrorMessage('');
 
     if (!passwordPolicy.isValid) {
-      setErrorMessage(`A nova senha ainda nao atende aos requisitos: ${passwordPolicy.messages.join(', ')}.`);
+      const message = `A nova senha ainda nao atende aos requisitos: ${passwordPolicy.messages.join(', ')}.`;
+      setErrorMessage(message);
+      toast.warning('Senha fraca', message, 6500);
       return;
     }
 
     if (password !== confirmPassword) {
-      setErrorMessage('As senhas informadas nao coincidem.');
+      const message = 'As senhas informadas nao coincidem.';
+      setErrorMessage(message);
+      toast.warning('Senhas diferentes', message);
       return;
     }
 
@@ -39,9 +45,12 @@ export default function PasswordRecoveryScreen({ onRecovered }: PasswordRecovery
       await updateCurrentUserPassword(password);
       setPassword('');
       setConfirmPassword('');
+      toast.success('Senha redefinida', 'Sua nova senha foi salva com sucesso.');
       onRecovered();
     } catch (error: any) {
-      setErrorMessage(error?.message || 'Nao foi possivel redefinir a senha. Solicite um novo link e tente novamente.');
+      const message = error?.message || 'Nao foi possivel redefinir a senha. Solicite um novo link e tente novamente.';
+      setErrorMessage(message);
+      toast.error('Falha ao redefinir senha', message);
     } finally {
       setIsSaving(false);
     }
@@ -116,12 +125,7 @@ export default function PasswordRecoveryScreen({ onRecovered }: PasswordRecovery
             </div>
           </div>
 
-          {errorMessage && (
-            <div className="flex items-start gap-2.5 rounded-2xl border border-red-200 bg-red-50 p-3 text-xs font-semibold leading-relaxed text-red-800">
-              <AlertCircle className="mt-0.5 h-4.5 w-4.5 flex-shrink-0 text-red-500" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
+          {errorMessage && <p className="text-xs font-medium text-red-700">{errorMessage}</p>}
 
           <button
             type="submit"

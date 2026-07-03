@@ -79,6 +79,7 @@ function createHealthRecord(partial: Partial<HealthRecord>): HealthRecord {
 function createMortalityRecord(partial: Partial<MortalityRecord>): MortalityRecord {
   return {
     id: partial.id ?? 'mort-1',
+    date: partial.date ?? (partial.occurredAt ? partial.occurredAt.slice(0, 10) : '2026-06-11'),
     occurredAt: partial.occurredAt ?? '2026-06-11T07:30',
     galpaoId: partial.galpaoId ?? 'galpao-1',
     animalId: partial.animalId ?? 'animal-1',
@@ -155,18 +156,17 @@ describe('manejo integration', () => {
 
   it('gera alertas de mortalidade e cruza ocorrências com registros de saúde', () => {
     const animals = [createAnimal({ id: 'animal-1', tag: 'Lote A', quantity: 100, currentQuantity: 92 })];
-    const galpoes = [createGalpao({ id: 'galpao-1', name: 'Galpão A', currentBirdCount: 92, mortalityThresholdPercent: 5 })];
-    const healthRecords = [createHealthRecord({ id: 'health-1', occurredAt: '2026-06-10T08:00', animalId: 'animal-1', galpaoId: 'galpao-1' })];
     const mortalityRecords = [
-      createMortalityRecord({ id: 'mort-1', deadCount: 8, occurredAt: '2026-06-11T07:30', cause: 'Síndrome respiratória' }),
+      createMortalityRecord({ id: 'mort-1', deadCount: 8, date: '2026-06-11', occurredAt: '2026-06-11T07:30', cause: 'Síndrome respiratória' }),
     ];
 
-    const report = buildMortalityReport(mortalityRecords, animals, galpoes, healthRecords);
+    const report = buildMortalityReport(mortalityRecords, animals);
 
     expect(report.totalDeadBirds).toBe(8);
-    expect(report.alerts).toHaveLength(1);
-    expect(report.alerts[0]?.exceedsThreshold).toBe(true);
-    expect(report.correlatedOutbreaks).toHaveLength(1);
-    expect(report.byGalpao[0]?.mortalityRatePercent).toBeCloseTo(calculateMortalityRate(8, 100), 2);
+    expect(report.totalOccurrences).toBe(1);
+    expect(report.byAnimal).toHaveLength(1);
+    expect(report.byAnimal[0]?.label).toBe('Lote A');
+    expect(report.byAnimal[0]?.mortalityRatePercent).toBeCloseTo(calculateMortalityRate(8, 100), 2);
+    expect(report.dailyTrend).toEqual([{ date: '2026-06-11', deadBirds: 8 }]);
   });
 });

@@ -111,7 +111,7 @@ export default function ClimaPage({ settings }: { settings: SystemSettingsData }
       setLoading(true);
       setError(null);
       try {
-        const data = await getWeatherData(lat, lon, locName, settings.openWeatherApiKey);
+        const data = await getWeatherData(lat, lon, locName);
         setWeatherData(data);
         localStorage.setItem('climaLocal', JSON.stringify(data));
         checkAlerts(data);
@@ -121,7 +121,7 @@ export default function ClimaPage({ settings }: { settings: SystemSettingsData }
         setLoading(false);
       }
     },
-    [settings.openWeatherApiKey, checkAlerts]
+    [checkAlerts]
   );
 
   const loadWeather = useCallback(async () => {

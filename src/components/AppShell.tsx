@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, Suspense, lazy, useCallback } from 'react';
-import { LogOut, Moon, Sun } from 'lucide-react';
+import { Clock3, LogOut, Moon, Sun } from 'lucide-react';
 import {
   AnimalRecord,
   BackupAutomationSettings,
@@ -25,8 +25,11 @@ import {
   FormulatedFeedStockRecord,
 } from '@/types';
 import Sidebar, { RouteId } from '@/components/Sidebar';
+import { useToast } from '@/components/ui/ToastProvider';
+import { BillingStatusResponse, fetchBillingStatus } from '@/lib/billing';
 
 const AnimaisPage = lazy(() => import('@/pages/AnimaisPage'));
+const AdminPage = lazy(() => import('@/pages/AdminPage'));
 const AssinaturaPage = lazy(() => import('@/pages/AssinaturaPage'));
 const BackupsPage = lazy(() => import('@/pages/BackupsPage'));
 const ClientePage = lazy(() => import('@/pages/ClientePage'));
@@ -91,6 +94,7 @@ import {
   updateMyGranjaAutoBackupSettings,
   updateMyGranjaBirdCount,
   upsertMyUser,
+  setBillingAccessState,
   upsertMyAnimal,
   upsertMyClient,
   upsertMyGalpao,
@@ -134,6 +138,51 @@ function getNextBackupTime(frequency: BackupAutomationSettings['frequency'], fro
   return next;
 }
 
+function getAccessLockMessage(
+  billingData: BillingStatusResponse | null,
+  billingError?: string | null,
+) {
+  const access = billingData?.access;
+
+  if (billingError) {
+    return {
+      title: 'Não foi possível validar sua assinatura',
+      description:
+        'Tente atualizar a seção de assinatura para confirmar o período de teste ou a liberação do seu plano.',
+    };
+  }
+
+  if (!access) {
+    return {
+      title: 'Validando acesso da conta',
+      description:
+        'Estamos conferindo o status do seu período de teste e da sua assinatura antes de liberar os módulos do sistema.',
+    };
+  }
+
+  if (access.reason === 'trial_expired') {
+    return {
+      title: 'Seu teste grátis terminou',
+      description:
+        'Escolha um plano na seção de assinatura para voltar a usar os módulos da plataforma.',
+    };
+  }
+
+  if (access.reason === 'subscription_required' || access.reason === 'entitlement_missing') {
+    return {
+      title: 'Assinatura obrigatória',
+      description:
+        'Sua conta precisa de um plano ativo para liberar novamente o acesso ao aplicativo.',
+    };
+  }
+
+  return {
+    title: 'Acesso temporariamente restrito',
+    description:
+      'Atualize o status da assinatura para validar novamente a liberação dos módulos.',
+  };
+}
+
 export default function AppShell({
   appState,
   onLogout,
@@ -144,6 +193,7 @@ export default function AppShell({
   onUpdateSystemSettings,
   onPreviewSystemPaletteChange,
 }: AppShellProps) {
+  const toast = useToast();
   const [activeRoute, setActiveRoute] = useState<RouteId>('inicio');
   // Persist sidebar collapsed state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
@@ -176,7 +226,64 @@ export default function AppShell({
   const [isBackupsSyncing, setIsBackupsSyncing] = useState(false);
   const [backupsError, setBackupsError] = useState<string | null>(null);
   const [backupAutomation, setBackupAutomation] = useState<BackupAutomationSettings>(DEFAULT_BACKUP_AUTOMATION);
+  const [billingData, setBillingData] = useState<BillingStatusResponse | null>(null);
+  const [isBillingLoading, setIsBillingLoading] = useState(true);
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<'usuario' | 'moderador' | 'admin' | null>(null);
+  const [isRoleLoading, setIsRoleLoading] = useState(true);
   const autoBackupRunRef = useRef(false);
+  const lastCadastrosErrorRef = useRef<string | null>(null);
+  const lastProfileErrorRef = useRef<string | null>(null);
+  const lastBackupsErrorRef = useRef<string | null>(null);
+  const lastBillingErrorRef = useRef<string | null>(null);
+  const hasModuleAccess = billingData?.access.hasAccess ?? false;
+  const isAdmin = currentUserRole === 'admin';
+  const hasShellAccess = isAdmin || hasModuleAccess;
+  const isAccessResolved = !isBillingLoading && !isRoleLoading;
+  const allowedRoutes = useMemo<RouteId[] | undefined>(
+    () =>
+      isAdmin
+        ? ['admin']
+        : isAccessResolved && !hasModuleAccess
+        ? ['assinatura']
+        : undefined,
+    [hasModuleAccess, isAccessResolved, isAdmin],
+  );
+  const accessLockMessage = useMemo(
+    () => getAccessLockMessage(billingData, billingError),
+    [billingData, billingError],
+  );
+  const trialDaysRemaining = !isAdmin && billingData?.access.reason === 'trial_active'
+    ? billingData.access.trialDaysRemaining
+    : null;
+
+  const handleBillingDataChange = useCallback((nextBillingData: BillingStatusResponse) => {
+    setBillingData(nextBillingData);
+    setBillingError(null);
+  }, []);
+
+  const loadBillingAccess = useCallback(async (showBackgroundLoader = false) => {
+    if (showBackgroundLoader) {
+      setBillingError(null);
+    } else {
+      setIsBillingLoading(true);
+      setBillingError(null);
+    }
+
+    try {
+      const nextBillingData = await fetchBillingStatus();
+      setBillingData(nextBillingData);
+      setBillingError(null);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível validar o acesso da assinatura.';
+      setBillingError(message);
+    } finally {
+      setIsBillingLoading(false);
+    }
+  }, []);
 
 
   // Save sidebar collapsed state to localStorage
@@ -184,7 +291,86 @@ export default function AppShell({
     localStorage.setItem('sidebar-collapsed', JSON.stringify(isSidebarCollapsed));
   }, [isSidebarCollapsed]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCurrentUserRole = async () => {
+      try {
+        const user = await getMyUser();
+        if (!isMounted) {
+          return;
+        }
+
+        setCurrentUserRole(user?.app_role || 'usuario');
+      } catch (error) {
+        console.warn('Nao foi possivel carregar o papel do usuario autenticado:', error);
+        if (isMounted) {
+          setCurrentUserRole('usuario');
+        }
+      } finally {
+        if (isMounted) {
+          setIsRoleLoading(false);
+        }
+      }
+    };
+
+    void loadCurrentUserRole();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    void loadBillingAccess();
+  }, [loadBillingAccess]);
+
+  useEffect(() => {
+    if (!isAccessResolved) {
+      return;
+    }
+
+    setBillingAccessState({
+      allowed: hasShellAccess,
+      reason:
+        isAdmin
+          ? 'admin_access'
+          : billingData?.access.reason || (billingError ? 'billing_error' : 'billing_pending'),
+    });
+  }, [billingData, billingError, hasShellAccess, isAccessResolved, isAdmin]);
+
+  useEffect(() => {
+    if (!isAccessResolved) {
+      return;
+    }
+
+    if (isAdmin) {
+      if (activeRoute !== 'admin') {
+        setActiveRoute('admin');
+        setIsMobileSidebarOpen(false);
+      }
+      return;
+    }
+
+    if (hasModuleAccess || activeRoute === 'assinatura') {
+      return;
+    }
+
+    setActiveRoute('assinatura');
+    setIsMobileSidebarOpen(false);
+  }, [activeRoute, hasModuleAccess, isAccessResolved, isAdmin]);
+
   const loadCadastros = useCallback(async () => {
+    if (!isAccessResolved) {
+      return;
+    }
+
+    if (isAdmin || !hasModuleAccess) {
+      setCadastrosError(null);
+      setIsCadastrosLoading(false);
+      return;
+    }
+
     if (!isSupabaseConfigured) {
       setCadastrosError('Supabase não está configurado para sincronizar os cadastros.');
       setIsCadastrosLoading(false);
@@ -268,13 +454,23 @@ export default function AppShell({
     } finally {
       setIsCadastrosLoading(false);
     }
-  }, []);
+  }, [hasModuleAccess, isAccessResolved, isAdmin]);
 
   useEffect(() => {
     void loadCadastros();
   }, [loadCadastros]);
 
   const loadBackups = useCallback(async () => {
+    if (!isAccessResolved) {
+      return;
+    }
+
+    if (isAdmin || !hasModuleAccess) {
+      setBackupsError(null);
+      setIsBackupsLoading(false);
+      return;
+    }
+
     if (!isSupabaseConfigured) {
       setBackupsError('Supabase não está configurado para sincronizar os backups.');
       setIsBackupsLoading(false);
@@ -292,15 +488,61 @@ export default function AppShell({
     } finally {
       setIsBackupsLoading(false);
     }
-  }, []);
+  }, [hasModuleAccess, isAccessResolved, isAdmin]);
 
   useEffect(() => {
     void loadBackups();
   }, [loadBackups]);
 
+  useEffect(() => {
+    if (!cadastrosError) {
+      lastCadastrosErrorRef.current = null;
+      return;
+    }
+
+    if (lastCadastrosErrorRef.current === cadastrosError) {
+      return;
+    }
+
+    toast.error('Falha ao sincronizar cadastros', cadastrosError);
+    lastCadastrosErrorRef.current = cadastrosError;
+  }, [cadastrosError, toast]);
+
+  useEffect(() => {
+    if (!profileError) {
+      lastProfileErrorRef.current = null;
+      return;
+    }
+
+    if (lastProfileErrorRef.current === profileError) {
+      return;
+    }
+
+    toast.error('Falha ao salvar configurações', profileError);
+    lastProfileErrorRef.current = profileError;
+  }, [profileError, toast]);
+
+  useEffect(() => {
+    if (!backupsError) {
+      lastBackupsErrorRef.current = null;
+      return;
+    }
+
+    if (lastBackupsErrorRef.current === backupsError) {
+      return;
+    }
+
+    toast.error('Falha ao processar backup', backupsError);
+    lastBackupsErrorRef.current = backupsError;
+  }, [backupsError, toast]);
+
   // Background Sync Processor
   useEffect(() => {
     let syncInterval: ReturnType<typeof setInterval>;
+
+    if (isAdmin || !hasModuleAccess) {
+      return;
+    }
 
     const handleOnline = () => {
       import('@/lib/syncProcessor').then(({ processSyncQueue }) => processSyncQueue());
@@ -322,9 +564,23 @@ export default function AppShell({
       window.removeEventListener('online', handleOnline);
       clearInterval(syncInterval);
     };
-  }, []);
+  }, [hasModuleAccess, isAdmin]);
 
   const refreshAppStateFromSupabase = async () => {
+    if (!isAccessResolved) {
+      return;
+    }
+
+    if (isAdmin) {
+      setBackupAutomation(DEFAULT_BACKUP_AUTOMATION);
+      return;
+    }
+
+    if (!hasModuleAccess) {
+      setBackupAutomation(DEFAULT_BACKUP_AUTOMATION);
+      return;
+    }
+
     if (!isSupabaseConfigured) {
       setBackupAutomation(DEFAULT_BACKUP_AUTOMATION);
       return;
@@ -390,7 +646,7 @@ export default function AppShell({
 
   useEffect(() => {
     void refreshAppStateFromSupabase();
-  }, []);
+  }, [hasModuleAccess, isAccessResolved, isAdmin]);
 
   const upsertAnimal = useCallback(async (payload: AnimalRecord) => {
     try {
@@ -1270,6 +1526,7 @@ export default function AppShell({
 
   const activeTitle = useMemo(() => {
     const titles: Record<RouteId, string> = {
+      admin: 'Administração • Painel',
       inicio: 'Início',
       manejo: 'Operações • Manejo',
       vendas: 'Operações • Vendas',
@@ -1295,9 +1552,15 @@ export default function AppShell({
   }, [activeRoute]);
 
   const handleNavigate = useCallback((route: RouteId) => {
-    setActiveRoute(route);
+    if (isAdmin) {
+      setActiveRoute('admin');
+      setIsMobileSidebarOpen(false);
+      return;
+    }
+
+    setActiveRoute(!hasModuleAccess && route !== 'assinatura' ? 'assinatura' : route);
     setIsMobileSidebarOpen(false);
-  }, []);
+  }, [hasModuleAccess, isAdmin]);
 
   const handleToggleSidebarCollapsed = useCallback(() => {
     setIsSidebarCollapsed((v) => !v);
@@ -1312,7 +1575,52 @@ export default function AppShell({
   }, []);
 
   const renderPage = () => {
+    if (!isAccessResolved) {
+      return (
+        <div className="flex min-h-[420px] items-center justify-center px-4 py-8">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-primary/10">
+              <div className="h-7 w-7 rounded-full border-4 border-brand-primary border-t-transparent animate-spin" />
+            </div>
+            <h2 className="mt-5 text-2xl font-extrabold text-[#0f1c2b]">
+              {accessLockMessage.title}
+            </h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              {accessLockMessage.description}
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!isAdmin && !hasModuleAccess && activeRoute !== 'assinatura') {
+      return (
+        <AssinaturaPage
+          initialBillingData={billingData}
+          onBillingDataChange={handleBillingDataChange}
+        />
+      );
+    }
+
+    if (isAdmin && activeRoute !== 'admin') {
+      return (
+        <div className="flex min-h-[420px] items-center justify-center px-4 py-8">
+          <div className="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand-primary/10">
+              <div className="h-7 w-7 rounded-full border-4 border-brand-primary border-t-transparent animate-spin" />
+            </div>
+            <h2 className="mt-5 text-2xl font-extrabold text-[#0f1c2b]">Abrindo painel administrativo</h2>
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              Estamos preparando o ambiente exclusivo do administrador.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
     switch (activeRoute) {
+      case 'admin':
+        return <AdminPage />;
       case 'inicio':
         return (
           <InicioPage
@@ -1323,7 +1631,7 @@ export default function AppShell({
             mortalities={mortalityRecords}
             settings={appState.systemSettings}
             farm={appState.farm}
-            onNavigate={setActiveRoute}
+            onNavigate={handleNavigate}
           />
         );
       case 'manejo':
@@ -1557,7 +1865,12 @@ export default function AppShell({
           />
         );
       case 'assinatura':
-        return <AssinaturaPage />;
+        return (
+          <AssinaturaPage
+            initialBillingData={billingData}
+            onBillingDataChange={handleBillingDataChange}
+          />
+        );
     }
   };
 
@@ -1571,6 +1884,7 @@ export default function AppShell({
       <Sidebar
         activeRoute={activeRoute}
         onNavigate={handleNavigate}
+        allowedRoutes={allowedRoutes}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapsed={handleToggleSidebarCollapsed}
         isDarkMode={isDarkMode}
@@ -1592,13 +1906,39 @@ export default function AppShell({
           <div className="flex items-center gap-4 min-w-0">
             <div className="min-w-0">
               <div className={`text-base font-bold truncate ${isDarkMode ? 'text-blue-400' : 'text-brand-primary'}`}>{activeTitle}</div>
-              <div className={`text-xs font-medium truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-                {appState.personal.email || 'Conta'}
+              <div className={`flex items-center gap-2 text-xs font-medium truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                <span className="truncate">{appState.personal.email || 'Conta'}</span>
+                {isAdmin && (
+                  <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-violet-700">
+                    Admin
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
           <div className="flex items-center gap-2 md:gap-3">
+            {trialDaysRemaining !== null && (
+              <button
+                type="button"
+                onClick={() => handleNavigate('assinatura')}
+                className={[
+                  'inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-bold shadow-sm transition-all',
+                  isDarkMode
+                    ? 'border-emerald-700/60 bg-emerald-950/40 text-emerald-200 hover:bg-emerald-900/50'
+                    : 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
+                ].join(' ')}
+                aria-label={`Você ainda tem ${trialDaysRemaining} dia(s) de teste gratuito`}
+                title={`Você ainda tem ${trialDaysRemaining} dia(s) de teste gratuito`}
+              >
+                <Clock3 className="h-4 w-4" />
+                <span className="hidden md:inline">
+                  Teste grátis: {trialDaysRemaining} dia(s)
+                </span>
+                <span className="md:hidden">{trialDaysRemaining} dia(s)</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onToggleDarkMode}
@@ -1639,6 +1979,29 @@ export default function AppShell({
           className={`flex-1 min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0 ${isDarkMode ? 'bg-[#0b1220]' : ''}`} 
           role="main"
         >
+          {isAccessResolved && !isAdmin && !hasModuleAccess && (
+            <div className="px-4 pt-4 md:px-6 md:pt-6">
+              <section
+                className={[
+                  'rounded-3xl border px-5 py-5 shadow-sm',
+                  billingError
+                    ? 'border-amber-200 bg-amber-50 text-amber-900'
+                    : 'border-rose-200 bg-rose-50 text-rose-900',
+                ].join(' ')}
+              >
+                <h2 className="text-lg font-extrabold">{accessLockMessage.title}</h2>
+                <p className="mt-2 text-sm font-medium leading-6">
+                  {accessLockMessage.description}
+                </p>
+                {billingError && (
+                  <p className="mt-3 rounded-2xl bg-white/70 px-4 py-3 text-sm font-semibold text-amber-900">
+                    Detalhe técnico: {billingError}
+                  </p>
+                )}
+              </section>
+            </div>
+          )}
+
           <Suspense fallback={
             <div className="flex items-center justify-center h-full min-h-[400px]">
               <div className="flex flex-col items-center gap-4">

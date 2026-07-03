@@ -52,7 +52,6 @@ export interface SystemSettingsData {
   eggSalePrice: number;
   birdSalePrice: number;
   litterSalePrice: number;
-  openWeatherApiKey?: string;
   weather: {
     defaultCity?: {
       name: string;

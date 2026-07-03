@@ -100,7 +100,7 @@ export default function InicioPage({
         const coords = settings.weather?.defaultCity || await searchCity(cityToSearch);
         
         if (coords) {
-          const data = await getWeatherData(coords.lat, coords.lon, coords.name || cityToSearch, settings.openWeatherApiKey);
+          const data = await getWeatherData(coords.lat, coords.lon, coords.name || cityToSearch);
           setWeatherData(data);
         }
       } catch (err) {
@@ -108,7 +108,7 @@ export default function InicioPage({
       }
     }
     loadWeather();
-  }, [settings.weather?.defaultCity, farm.city, settings.openWeatherApiKey]);
+  }, [settings.weather?.defaultCity, farm.city]);
   
   // KPIs
   const totalBirds = useMemo(() => {

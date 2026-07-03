@@ -4,8 +4,9 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Mail, Lock, ArrowRight, Wheat, Eye, EyeOff, AlertCircle, LineChart, ShieldCheck, Beaker, Sprout, CheckCircle2 } from 'lucide-react';
-import { requestPasswordResetEmail, signInWithEmail, isSupabaseConfigured } from '@/lib/supabase';
+import { Mail, Lock, ArrowRight, Wheat, Eye, EyeOff, LineChart, ShieldCheck, Beaker, Sprout, CheckCircle2 } from 'lucide-react';
+import { requestPasswordResetEmail, resendSignupConfirmationEmail, signInWithEmail, isSupabaseConfigured } from '@/lib/supabase';
+import { useToast } from '@/components/ui/ToastProvider';
 
 interface LoginScreenProps {
   onLogin: () => void;
@@ -15,6 +16,7 @@ interface LoginScreenProps {
 }
 
 export default function LoginScreen({ onLogin, onGoToSignup, initialEmail, notice }: LoginScreenProps) {
+  const toast = useToast();
   const [email, setEmail] = useState(initialEmail || '');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
@@ -22,8 +24,10 @@ export default function LoginScreen({ onLogin, onGoToSignup, initialEmail, notic
   const [authError, setAuthError] = useState('');
   const [authNotice, setAuthNotice] = useState('');
   const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [loginCooldownUntil, setLoginCooldownUntil] = useState(0);
+  const [needsEmailConfirmation, setNeedsEmailConfirmation] = useState(false);
 
   useEffect(() => {
     if (initialEmail) {
@@ -31,10 +35,29 @@ export default function LoginScreen({ onLogin, onGoToSignup, initialEmail, notic
     }
   }, [initialEmail]);
 
+  useEffect(() => {
+    if (notice) {
+      toast.info('Aviso da conta', notice);
+    }
+  }, [notice, toast]);
+
+  useEffect(() => {
+    if (authNotice) {
+      toast.success('Tudo certo', authNotice);
+    }
+  }, [authNotice, toast]);
+
+  useEffect(() => {
+    if (authError) {
+      toast.error('Falha na autenticação', authError);
+    }
+  }, [authError, toast]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError('');
     setAuthNotice('');
+    setNeedsEmailConfirmation(false);
 
     const now = Date.now();
     if (now < loginCooldownUntil) {
@@ -74,14 +97,17 @@ export default function LoginScreen({ onLogin, onGoToSignup, initialEmail, notic
       }
       if (message.toLowerCase().includes('email not confirmed')) {
         setAuthError('Confirme seu e-mail antes de entrar.');
+        setNeedsEmailConfirmation(true);
         return;
       }
       setAuthError(message || 'Falha ao autenticar. Tente novamente.');
     }
   };
+
   const handleRequestPasswordReset = async () => {
     setAuthError('');
     setAuthNotice('');
+    setNeedsEmailConfirmation(false);
 
     if (!isSupabaseConfigured) {
       setAuthError('Falha ao conectar com o servidor. Tente novamente mais tarde.');
@@ -103,6 +129,27 @@ export default function LoginScreen({ onLogin, onGoToSignup, initialEmail, notic
       setAuthError(error?.message || 'Nao foi possivel enviar o link de redefinicao.');
     } finally {
       setIsResettingPassword(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    setAuthError('');
+    setAuthNotice('');
+
+    const trimmedEmail = email.trim();
+    if (!/^\S+@\S+\.\S+$/.test(trimmedEmail)) {
+      setAuthError('Informe o e-mail cadastrado para reenviar a confirmação.');
+      return;
+    }
+
+    try {
+      setIsResendingConfirmation(true);
+      await resendSignupConfirmationEmail(trimmedEmail);
+      setAuthNotice('Reenviamos o e-mail de confirmação. Verifique sua caixa de entrada e spam.');
+    } catch (error: any) {
+      setAuthError(error?.message || 'Nao foi possivel reenviar a confirmação do e-mail.');
+    } finally {
+      setIsResendingConfirmation(false);
     }
   };
 
@@ -188,18 +235,6 @@ export default function LoginScreen({ onLogin, onGoToSignup, initialEmail, notic
             {/* Login Form */}
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-              {notice && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-2xl flex items-start gap-2.5 text-xs text-green-800 font-semibold leading-relaxed">
-                  <span>{notice}</span>
-                </div>
-              )}
-              
-              {authNotice && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-2xl flex items-start gap-2.5 text-xs text-green-800 font-semibold leading-relaxed">
-                  <span>{authNotice}</span>
-                </div>
-              )}
-              
               {/* Email Input Group */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-bold text-gray-700" htmlFor="email-login">
@@ -275,11 +310,20 @@ export default function LoginScreen({ onLogin, onGoToSignup, initialEmail, notic
                 </button>
               </div>
 
-              {/* Inline authentication error feedback banner */}
-              {authError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-2.5 text-xs text-red-800 font-semibold leading-relaxed">
-                  <AlertCircle className="w-4.5 h-4.5 text-red-500 mt-0.5 flex-shrink-0" />
-                  <span>{authError}</span>
+              {needsEmailConfirmation && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-900">Confirmação pendente</p>
+                  <p className="mt-1 text-xs font-medium leading-relaxed text-amber-800">
+                    Confirme seu e-mail para concluir o acesso. Se precisar, reenvie a mensagem de confirmação abaixo.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleResendConfirmation}
+                    disabled={isResendingConfirmation}
+                    className="mt-3 w-full rounded-full border border-brand-primary/30 bg-brand-primary/5 px-4 py-2.5 text-xs font-bold text-brand-primary transition-colors hover:bg-brand-primary/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isResendingConfirmation ? 'Reenviando confirmação...' : 'Reenviar e-mail de confirmação'}
+                  </button>
                 </div>
               )}
 

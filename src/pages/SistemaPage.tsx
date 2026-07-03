@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { SystemSettingsData, THEME_PALETTES } from '@/types';
 import { resolveThemePalette } from '@/lib/theme';
 import { searchCity } from '@/lib/weather';
+import { useToast } from '@/components/ui/ToastProvider';
 
 interface SistemaPageProps {
   settings: SystemSettingsData;
@@ -32,6 +33,7 @@ export default function SistemaPage({
   onSave,
   onPreviewPaletteChange,
 }: SistemaPageProps) {
+  const toast = useToast();
   // Initialize with default weather config if not present
   const initialSettings = useMemo(() => {
     return {
@@ -54,24 +56,13 @@ export default function SistemaPage({
     };
   }, [settings]);
   const [draft, setDraft] = useState<SystemSettingsData>(initialSettings);
-  const [successMessage, setSuccessMessage] = useState('');
   const [defaultCitySearch, setDefaultCitySearch] = useState('');
   const [defaultCityError, setDefaultCityError] = useState('');
   const [isValidatingCity, setIsValidatingCity] = useState(false);
-  
-  // Check if environment variable is set (takes precedence)
-  const envApiKey = import.meta.env.VITE_OPENWEATHER_API_KEY;
-  const hasEnvApiKey = !!envApiKey;
 
   useEffect(() => {
     setDraft(settings);
   }, [settings]);
-
-  useEffect(() => {
-    if (errorMessage) {
-      setSuccessMessage('');
-    }
-  }, [errorMessage]);
 
   const summary = useMemo(
     () => [
@@ -85,9 +76,8 @@ export default function SistemaPage({
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSuccessMessage('');
     await onSave(draft);
-    setSuccessMessage('Preferências do sistema atualizadas com sucesso.');
+    toast.success('Preferências salvas', 'As configurações do sistema foram atualizadas com sucesso.');
   };
 
   return (
@@ -164,33 +154,20 @@ export default function SistemaPage({
             />
           </label>
 
-          <label className="space-y-2 md:col-span-2">
-            <span className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Chave de API OpenWeather (opcional, para fallback)</span>
-            
-            {hasEnvApiKey ? (
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
-                <p className="text-sm text-blue-800 font-semibold mb-1">
-                  ✅ Chave API encontrada em variável de ambiente (VITE_OPENWEATHER_API_KEY)
-                </p>
-                <p className="text-xs text-blue-700">
-                  Esta chave tem prioridade sobre a chave salva nas configurações do sistema.
-                </p>
-              </div>
-            ) : (
-              <input
-                type="password"
-                value={draft.openWeatherApiKey || ''}
-                onChange={(event) => setDraft((prev) => ({ ...prev, openWeatherApiKey: event.target.value }))}
-                className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none transition-colors focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
-                placeholder="Sua chave de API OpenWeather (ex: abc123...)"
-              />
-            )}
-            
+          <div className="space-y-2 md:col-span-2">
+            <span className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Fallback seguro do clima</span>
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+              <p className="text-sm font-semibold text-blue-800">
+                O fallback do OpenWeather agora fica protegido no servidor.
+              </p>
+              <p className="mt-1 text-xs text-blue-700">
+                Configure a variavel <code>OPENWEATHER_API_KEY</code> no ambiente do servidor para habilitar a contingencia sem expor a chave no navegador.
+              </p>
+            </div>
             <p className="text-xs text-gray-400">
-              Esta chave é usada como fonte de contingência se o Open-Meteo estiver indisponível. 
-              Obtenha gratuitamente em <a href="https://openweathermap.org/api" target="_blank" rel="noopener noreferrer" className="text-brand-primary underline">openweathermap.org</a>.
+              O Open-Meteo continua como fonte principal. Se desejar fallback, gere sua chave em <a href="https://openweathermap.org/api" target="_blank" rel="noopener noreferrer" className="text-brand-primary underline">openweathermap.org</a> e salve-a apenas no servidor.
             </p>
-          </label>
+          </div>
         </div>
 
         <div className="mt-8 pt-6 border-t border-gray-200">
@@ -256,8 +233,10 @@ export default function SistemaPage({
                               defaultCity: result,
                             },
                           }));
+                          toast.success('Cidade padrão definida', `${result.name} será usada como referência climática.`);
                         } else {
                           setDefaultCityError('Cidade não encontrada. Verifique o nome e tente novamente.');
+                          toast.warning('Cidade não encontrada', 'Verifique o nome informado e tente novamente.');
                         }
                         setIsValidatingCity(false);
                       }}
@@ -317,12 +296,6 @@ export default function SistemaPage({
             </div>
           </div>
         </div>
-
-        {successMessage && (
-          <div className="rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-            {successMessage}
-          </div>
-        )}
 
         <div className="flex justify-end">
           <button

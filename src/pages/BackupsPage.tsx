@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BackupAutomationSettings, BackupFrequency, BackupRecord, BackupSnapshot } from '@/types';
+import { useToast } from '@/components/ui/ToastProvider';
 
 interface BackupsPageProps {
   records: BackupRecord[];
@@ -41,6 +42,28 @@ function getBackupFileName(baseName: string) {
   return `${normalized || 'backup'}-${new Date().toISOString().slice(0, 10)}.json`;
 }
 
+const MAX_BACKUP_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const RESTORE_CONFIRMATION_TEXT = 'RESTAURAR';
+
+function getBackupRecordCount(snapshot: BackupSnapshot) {
+  return (
+    snapshot.animals.length +
+    snapshot.clients.length +
+    snapshot.suppliers.length +
+    snapshot.galpoes.length +
+    snapshot.healthProfessionals.length +
+    snapshot.healthRecords.length +
+    snapshot.veterinaryStock.length +
+    snapshot.mortalityRecords.length +
+    snapshot.manejoRecords.length +
+    snapshot.disponibilidadeVenda.length +
+    snapshot.vendas.length +
+    snapshot.ingredients.length +
+    snapshot.formulations.length +
+    snapshot.formulatedFeedStock.length
+  );
+}
+
 export default function BackupsPage({
   records,
   automation,
@@ -55,8 +78,8 @@ export default function BackupsPage({
   onSaveAutomation,
   onRetry,
 }: BackupsPageProps) {
+  const toast = useToast();
   const [backupName, setBackupName] = useState(`Backup ${new Date().toLocaleDateString('pt-BR')}`);
-  const [successMessage, setSuccessMessage] = useState('');
   const [automationDraft, setAutomationDraft] = useState<BackupAutomationSettings>(automation);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -73,30 +96,43 @@ export default function BackupsPage({
   }, [records]);
 
   const handleSaveBackup = async () => {
-    setSuccessMessage('');
     await onCreateSupabaseBackup(backupName);
-    setSuccessMessage('Backup salvo no Supabase com sucesso.');
+    toast.success('Backup salvo', 'Seu backup foi armazenado com segurança no Supabase.');
   };
 
   const handleDownloadCurrent = async () => {
-    setSuccessMessage('');
     const snapshot = await onDownloadCurrentBackup();
     triggerDownload(snapshot, getBackupFileName(backupName));
-    setSuccessMessage('Arquivo de backup gerado com sucesso.');
+    toast.success('Arquivo gerado', 'O backup foi baixado em formato JSON.');
   };
 
   const handleRestore = async (snapshot: BackupSnapshot, sourceLabel: string) => {
-    const confirmed = window.confirm(`Deseja restaurar os dados deste backup de ${sourceLabel}? Isso substituirá os cadastros atuais.`);
+    const totalRecords = getBackupRecordCount(snapshot);
+    const confirmed = window.confirm(
+      `Deseja restaurar os dados deste backup de ${sourceLabel}?\n\n` +
+        `Granja: ${snapshot.farmProfile?.farmName || 'Não identificada'}\n` +
+        `Exportado em: ${snapshot.exportedAt ? formatDateTime(snapshot.exportedAt) : 'Data inválida'}\n` +
+        `Total aproximado de registros: ${totalRecords}\n\n` +
+        'Isso substituirá os cadastros atuais.',
+    );
     if (!confirmed) return;
-    setSuccessMessage('');
+
+    const challenge = window.prompt(
+      `Para confirmar a restauração destrutiva, digite ${RESTORE_CONFIRMATION_TEXT}.`,
+      '',
+    );
+    if (challenge !== RESTORE_CONFIRMATION_TEXT) {
+      toast.warning('Restauração cancelada', 'A confirmação digitada não confere.');
+      return;
+    }
+
     await onRestoreBackup(snapshot);
-    setSuccessMessage('Backup restaurado com sucesso.');
+    toast.success('Backup restaurado', 'Os dados da conta foram restaurados com sucesso.');
   };
 
   const handleSaveAutomation = async () => {
-    setSuccessMessage('');
     await onSaveAutomation(automationDraft);
-    setSuccessMessage('Configuração de backup automático salva com sucesso.');
+    toast.success('Automação salva', 'A rotina automática de backup foi atualizada.');
   };
 
   const handleFileSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,9 +140,24 @@ export default function BackupsPage({
     if (!file) return;
 
     try {
+      if (!file.name.toLowerCase().endsWith('.json')) {
+        throw new Error('Selecione um arquivo JSON de backup válido.');
+      }
+
+      if (file.size > MAX_BACKUP_FILE_SIZE_BYTES) {
+        throw new Error('O arquivo de backup excede o limite de 5 MB permitido por segurança.');
+      }
+
       const raw = await file.text();
+      if (!raw.trim()) {
+        throw new Error('O arquivo selecionado está vazio.');
+      }
+
       const parsed = JSON.parse(raw) as BackupSnapshot;
       await handleRestore(parsed, `arquivo ${file.name}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Não foi possível validar o arquivo de backup.';
+      toast.error('Falha ao validar backup', message);
     } finally {
       event.target.value = '';
     }
@@ -140,11 +191,6 @@ export default function BackupsPage({
           </div>
         )}
 
-        {successMessage && (
-          <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm font-medium text-green-700">
-            {successMessage}
-          </div>
-        )}
       </section>
 
       <section className="app-section-card space-y-5">

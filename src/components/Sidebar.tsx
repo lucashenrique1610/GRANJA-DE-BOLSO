@@ -25,9 +25,11 @@ import {
   Calculator,
   MessageCircle,
   Mail,
+  ShieldCheck,
 } from 'lucide-react';
 
 export type RouteId =
+  | 'admin'
   | 'inicio'
   | 'manejo'
   | 'vendas'
@@ -52,6 +54,7 @@ export type RouteId =
 interface SidebarProps {
   activeRoute: RouteId;
   onNavigate: (route: RouteId) => void;
+  allowedRoutes?: RouteId[];
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
   isDarkMode: boolean;
@@ -69,6 +72,19 @@ type MenuItem = {
 type MenuCategory =
   | { kind: 'single'; item: MenuItem }
   | { kind: 'group'; id: string; label: string; icon: React.ReactNode; items: MenuItem[] };
+
+const ACCORDION_DURATION_MS = 400;
+const ACCORDION_EASING = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
+const cloneMenuIcon = (icon: React.ReactNode, className: string) => {
+  if (!React.isValidElement(icon)) {
+    return icon;
+  }
+
+  return React.cloneElement(icon as React.ReactElement<{ className?: string }>, {
+    className,
+  });
+};
 
 // ---------------------------------------------------------------------------
 // SidebarGroupItem — proper React component so useState hooks are always valid
@@ -96,11 +112,37 @@ const SidebarGroupItem = React.memo(function SidebarGroupItem({
   onNavigate,
 }: SidebarGroupItemProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentHeight, setContentHeight] = useState(0);
   const hasActiveChild = cat.items.some((item) => item.id === activeRoute);
+
+  useEffect(() => {
+    const contentElement = contentRef.current;
+
+    if (!contentElement) {
+      return;
+    }
+
+    const syncContentHeight = () => {
+      setContentHeight(contentElement.scrollHeight);
+    };
+
+    syncContentHeight();
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', syncContentHeight);
+      return () => window.removeEventListener('resize', syncContentHeight);
+    }
+
+    const resizeObserver = new ResizeObserver(syncContentHeight);
+    resizeObserver.observe(contentElement);
+
+    return () => resizeObserver.disconnect();
+  }, [cat.items.length, isCollapsed]);
 
   return (
     <div
-      className="space-y-1 relative"
+      className="relative space-y-1.5"
       style={{ zIndex: isHovered && isCollapsed ? 9999 : undefined }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
@@ -110,7 +152,7 @@ const SidebarGroupItem = React.memo(function SidebarGroupItem({
         type="button"
         onClick={() => { if (!isCollapsed) onToggle(groupId); }}
         className={[
-          'w-full flex items-center gap-3 px-5 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 cursor-pointer text-left',
+          'w-full flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-[15px] font-semibold leading-5 tracking-[0.01em] transition-[background-color,color,box-shadow,transform] duration-200',
           hasActiveChild
             ? isDarkMode
               ? 'text-slate-100 bg-slate-800/70 shadow-md'
@@ -124,22 +166,21 @@ const SidebarGroupItem = React.memo(function SidebarGroupItem({
         aria-label={`${cat.label} (${cat.items.length} sub-itens)`}
         title={isCollapsed ? cat.label : undefined}
       >
-        {/* Icon */}
         <span
+          className="flex-shrink-0"
           style={hasActiveChild ? { color: 'var(--brand-primary)' } : undefined}
         >
-          {React.cloneElement(cat.icon as React.ReactElement, {
-            className: isCollapsed ? 'w-6 h-6' : 'w-5 h-5',
-          })}
+          {cloneMenuIcon(cat.icon, isCollapsed ? 'h-5.5 w-5.5' : 'h-[1.125rem] w-[1.125rem]')}
         </span>
 
         {!isCollapsed && (
           <>
             <span className="flex-1 truncate">{cat.label}</span>
             <ChevronDown
-              className={`w-4 h-4 flex-shrink-0 transition-transform duration-200 ${
+              className={`h-4 w-4 flex-shrink-0 transition-transform duration-300 ${
                 isDarkMode ? 'text-slate-500' : 'text-slate-400'
               } ${isOpen ? 'rotate-180' : ''}`}
+              style={{ transitionTimingFunction: ACCORDION_EASING }}
             />
           </>
         )}
@@ -177,7 +218,7 @@ const SidebarGroupItem = React.memo(function SidebarGroupItem({
                   type="button"
                   onClick={() => onNavigate(item.id)}
                   className={[
-                    'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 cursor-pointer text-left',
+                    'w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium leading-5 tracking-[0.01em] transition-[background-color,color,box-shadow] duration-150',
                     isActive
                       ? isDarkMode
                         ? 'bg-slate-700/80 shadow-sm'
@@ -195,8 +236,11 @@ const SidebarGroupItem = React.memo(function SidebarGroupItem({
                   aria-label={item.label}
                   role="menuitem"
                 >
-                  <span style={isActive ? { color: 'var(--brand-primary)' } : undefined}>
-                    {item.icon}
+                  <span
+                    className="flex-shrink-0"
+                    style={isActive ? { color: 'var(--brand-primary)' } : undefined}
+                  >
+                    {cloneMenuIcon(item.icon, 'h-4.5 w-4.5')}
                   </span>
                   <span className="truncate">{item.label}</span>
                 </button>
@@ -210,11 +254,18 @@ const SidebarGroupItem = React.memo(function SidebarGroupItem({
       {/* Expanded → animated sub-items */}
       {!isCollapsed && (
         <div
-          className="overflow-hidden transition-all duration-200"
-          style={{ maxHeight: isOpen ? `${cat.items.length * 52}px` : '0px', opacity: isOpen ? 1 : 0 }}
+          className="overflow-hidden will-change-[max-height,opacity,transform]"
+          style={{
+            maxHeight: isOpen ? `${contentHeight}px` : '0px',
+            opacity: isOpen ? 1 : 0,
+            pointerEvents: isOpen ? 'auto' : 'none',
+            transform: isOpen ? 'translateY(0)' : 'translateY(-6px)',
+            transition: `max-height ${ACCORDION_DURATION_MS}ms ${ACCORDION_EASING}, opacity 320ms ease, transform ${ACCORDION_DURATION_MS}ms ${ACCORDION_EASING}`,
+          }}
         >
           <div
-            className={`ml-5 pl-3 border-l space-y-0.5 pb-1 ${
+            ref={contentRef}
+            className={`ml-6 border-l pl-3 space-y-1 pb-1 pt-1 ${
               isDarkMode ? 'border-slate-700' : 'border-slate-200'
             }`}
           >
@@ -226,7 +277,7 @@ const SidebarGroupItem = React.memo(function SidebarGroupItem({
                   type="button"
                   onClick={() => onNavigate(item.id)}
                   className={[
-                    'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 cursor-pointer text-left',
+                    'w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-medium leading-5 tracking-[0.01em] transition-[background-color,color,box-shadow] duration-150',
                     isActive
                       ? isDarkMode
                         ? 'bg-slate-800/90 shadow-sm'
@@ -250,7 +301,7 @@ const SidebarGroupItem = React.memo(function SidebarGroupItem({
                     style={isActive ? { color: 'var(--brand-primary)' } : undefined}
                     className="flex-shrink-0"
                   >
-                    {item.icon}
+                    {cloneMenuIcon(item.icon, 'h-4.5 w-4.5')}
                   </span>
                   <span className="truncate">{item.label}</span>
                 </button>
@@ -269,6 +320,7 @@ const SidebarGroupItem = React.memo(function SidebarGroupItem({
 function Sidebar({
   activeRoute,
   onNavigate,
+  allowedRoutes,
   isCollapsed,
   onToggleCollapsed,
   isDarkMode,
@@ -278,6 +330,10 @@ function Sidebar({
 }: SidebarProps) {
   const categories = useMemo<MenuCategory[]>(
     () => [
+      {
+        kind: 'single',
+        item: { id: 'admin', label: 'Administração', icon: <ShieldCheck className="w-5 h-5" /> },
+      },
       {
         kind: 'single',
         item: { id: 'inicio', label: 'Início', icon: <Home className="w-5 h-5" /> },
@@ -345,26 +401,47 @@ function Sidebar({
     []
   );
 
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    operacoes: false,
-    cadastro: false,
-    gestao: false,
-    monitoramento: false,
-    configuracoes: false,
-  });
+  const visibleCategories = useMemo(() => {
+    if (!allowedRoutes?.length) {
+      return categories;
+    }
+
+    const allowedRouteSet = new Set<RouteId>(allowedRoutes);
+
+    return categories.flatMap((category) => {
+      if (category.kind === 'single') {
+        return allowedRouteSet.has(category.item.id) ? [category] : [];
+      }
+
+      const visibleItems = category.items.filter((item) => allowedRouteSet.has(item.id));
+
+      if (visibleItems.length === 0) {
+        return [];
+      }
+
+      return [
+        {
+          ...category,
+          items: visibleItems,
+        },
+      ];
+    });
+  }, [allowedRoutes, categories]);
+
+  const [openGroupId, setOpenGroupId] = useState<string | null>(null);
 
   const isNavigatingRef = useRef(false);
   const mobileSidebarRef = useRef<HTMLDivElement>(null);
 
   // Auto-open the group containing the active route
   useEffect(() => {
-    const activeGroup = categories.find(
+    const activeGroup = visibleCategories.find(
       (cat) => cat.kind === 'group' && cat.items.some((item) => item.id === activeRoute)
     );
     if (activeGroup?.kind === 'group') {
-      setOpenGroups((prev) => ({ ...prev, [activeGroup.id]: true }));
+      setOpenGroupId(activeGroup.id);
     }
-  }, [activeRoute, categories]);
+  }, [activeRoute, visibleCategories]);
 
   // Keyboard: close mobile sidebar with Escape
   useEffect(() => {
@@ -392,17 +469,20 @@ function Sidebar({
       document.activeElement.blur();
     }
     onNavigate(route);
+    if (isMobileOpen) {
+      onRequestCloseMobile();
+    }
     setTimeout(() => { isNavigatingRef.current = false; }, 300);
-  }, [onNavigate]);
+  }, [isMobileOpen, onNavigate, onRequestCloseMobile]);
 
   const toggleGroup = useCallback((id: string) => {
-    setOpenGroups((prev) => ({ ...prev, [id]: !prev[id] }));
+    setOpenGroupId((prev) => (prev === id ? null : id));
   }, []);
 
   // -------------------------------------------------------------------------
   // Render helpers
   // -------------------------------------------------------------------------
-  const renderSingleItem = (item: MenuItem) => {
+  const renderSingleItem = (item: MenuItem, isCompact: boolean) => {
     const isActive = activeRoute === item.id;
     return (
       <button
@@ -410,7 +490,7 @@ function Sidebar({
         type="button"
         onClick={() => handleNavigate(item.id)}
         className={[
-          'w-full relative flex items-center gap-3 px-5 py-3 rounded-xl text-[14px] font-semibold transition-all duration-200 cursor-pointer text-left',
+          'w-full relative flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-[15px] font-semibold leading-5 tracking-[0.01em] transition-[background-color,color,box-shadow,transform] duration-200',
           isActive
             ? isDarkMode
               ? 'bg-slate-800/80 shadow-md'
@@ -418,30 +498,30 @@ function Sidebar({
             : isDarkMode
             ? 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
             : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800',
-          isCollapsed ? 'justify-center px-3' : '',
+          isCompact ? 'justify-center px-3' : '',
         ].join(' ')}
         style={isActive ? { color: 'var(--brand-primary)' } : undefined}
         aria-current={isActive ? 'page' : undefined}
         aria-label={item.label}
-        title={isCollapsed ? item.label : undefined}
+        title={isCompact ? item.label : undefined}
       >
-        {/* Left accent bar */}
-        {isActive && !isCollapsed && (
+        {isActive && !isCompact && (
           <span
             className="absolute left-0 top-2 bottom-2 w-1 rounded-r-full"
             style={{ background: 'var(--brand-primary)' }}
           />
         )}
-        <span style={isActive ? { color: 'var(--brand-primary)' } : undefined}>
-          {React.cloneElement(item.icon as React.ReactElement, {
-            className: isCollapsed ? 'w-6 h-6' : 'w-5 h-5',
-          })}
+        <span
+          className="flex-shrink-0"
+          style={isActive ? { color: 'var(--brand-primary)' } : undefined}
+        >
+          {cloneMenuIcon(item.icon, isCompact ? 'h-5.5 w-5.5' : 'h-[1.125rem] w-[1.125rem]')}
         </span>
-        {!isCollapsed && (
+        {!isCompact && (
           <>
             <span className="truncate flex-1">{item.label}</span>
             <ChevronRight
-              className="w-4 h-4 flex-shrink-0"
+              className="h-4 w-4 flex-shrink-0"
               style={isActive ? { color: 'var(--brand-primary)' } : { color: '#94a3b8' }}
             />
           </>
@@ -450,16 +530,17 @@ function Sidebar({
     );
   };
 
-  const renderSidebarContent = () => (
+  const renderSidebarContent = ({ forceExpanded = false }: { forceExpanded?: boolean } = {}) => {
+    const isCompact = isCollapsed && !forceExpanded;
+
+    return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div
         className={`flex items-center border-b flex-shrink-0 ${
           isDarkMode ? 'border-slate-700/60' : 'border-slate-200'
-        } ${isCollapsed ? 'justify-center px-3 py-4' : 'justify-between px-4 py-4'}`}
+        } ${isCompact ? 'justify-center px-3 py-4' : 'justify-between px-4 py-4'}`}
       >
-        {isCollapsed ? (
-          /* Collapsed: show small icon-only logo */
+        {isCompact ? (
           <button
             type="button"
             onClick={onToggleCollapsed}
@@ -477,7 +558,7 @@ function Sidebar({
             <img
               src="/logo.png"
               alt="Logo Granja de Bolso"
-              className="h-16 w-auto object-contain drop-shadow-sm"
+              className="h-14 w-auto object-contain drop-shadow-sm sm:h-16"
             />
             <button
               type="button"
@@ -503,25 +584,24 @@ function Sidebar({
         )}
       </div>
 
-      {/* Navigation */}
       <nav
-        className="flex-1 overflow-y-auto px-3 py-4 space-y-1 scrollbar-thin"
+        className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5 scrollbar-thin"
         role="navigation"
         aria-label="Menu principal"
       >
-        {categories.map((cat, idx) => {
+        {visibleCategories.map((cat, idx) => {
           if (cat.kind === 'single') {
-            return <div key={`single-${idx}`}>{renderSingleItem(cat.item)}</div>;
+            return <div key={`single-${idx}`}>{renderSingleItem(cat.item, isCompact)}</div>;
           }
           return (
             <SidebarGroupItem
               key={cat.id}
               cat={cat as Extract<MenuCategory, { kind: 'group' }>}
               groupId={cat.id}
-              isCollapsed={isCollapsed}
+              isCollapsed={isCompact}
               isDarkMode={isDarkMode}
               activeRoute={activeRoute}
-              isOpen={openGroups[cat.id] ?? false}
+              isOpen={openGroupId === cat.id}
               onToggle={toggleGroup}
               onNavigate={handleNavigate}
             />
@@ -529,8 +609,7 @@ function Sidebar({
         })}
       </nav>
 
-      {/* Support Block */}
-      {!isCollapsed ? (
+      {!isCompact ? (
         <div className={`mt-auto mx-4 mb-4 p-4 rounded-2xl shrink-0 ${isDarkMode ? 'bg-slate-800/80 border border-slate-700' : 'bg-brand-primary/5 border border-brand-primary/10'}`}>
           <div className={`text-[10px] font-black uppercase tracking-widest mb-3 ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Precisa de Ajuda?</div>
           
@@ -556,24 +635,51 @@ function Sidebar({
         </div>
       )}
     </div>
-  );
+    );
+  };
 
   // -------------------------------------------------------------------------
   // Bottom mobile nav
   // -------------------------------------------------------------------------
-  const bottomNavGroups: Array<{ id: RouteId; label: string; icon: React.ReactNode; routes: RouteId[] }> = [
-    { id: 'inicio', label: 'Início', icon: <Home className="w-6 h-6" />, routes: ['inicio'] },
-    { id: 'manejo', label: 'Manejo', icon: <ClipboardList className="w-6 h-6" />, routes: ['manejo', 'formulacao'] },
-    { id: 'vendas', label: 'Vendas', icon: <ShoppingBag className="w-6 h-6" />, routes: ['vendas'] },
-  ];
+  const bottomNavGroups = useMemo<Array<{ id: RouteId; label: string; icon: React.ReactNode; routes: RouteId[] }>>(
+    () => {
+      if (allowedRoutes?.length) {
+        return allowedRoutes.map((route) => ({
+          id: route,
+          label:
+            route === 'admin'
+              ? 'Admin'
+              : route === 'assinatura'
+              ? 'Assinatura'
+              : route === 'perfil'
+              ? 'Perfil'
+              : 'Menu',
+          icon:
+            route === 'admin'
+              ? <ShieldCheck className="w-6 h-6" />
+              : route === 'perfil'
+              ? <UserCircle2 className="w-6 h-6" />
+              : <Cog className="w-6 h-6" />,
+          routes: [route],
+        }));
+      }
 
-  const isMoreActive = ['clima', 'conhecimento', 'perfil', 'sistema', 'backups', 'assinatura'].includes(activeRoute);
+      return [
+        { id: 'inicio', label: 'Início', icon: <Home className="w-6 h-6" />, routes: ['inicio'] },
+        { id: 'manejo', label: 'Manejo', icon: <ClipboardList className="w-6 h-6" />, routes: ['manejo', 'formulacao'] },
+        { id: 'vendas', label: 'Vendas', icon: <ShoppingBag className="w-6 h-6" />, routes: ['vendas'] },
+      ];
+    },
+    [allowedRoutes],
+  );
+
+  const isMoreActive = !bottomNavGroups.some((grp) => grp.routes.includes(activeRoute));
 
   // -------------------------------------------------------------------------
   // Classes
   // -------------------------------------------------------------------------
   const widthClass = isCollapsed ? 'w-[4.5rem]' : 'w-64';
-  const desktopClass = `hidden md:flex ${widthClass} flex-col z-40 overflow-visible transition-all duration-250 ${
+  const desktopClass = `hidden md:flex ${widthClass} flex-col z-40 overflow-visible transition-all duration-300 ${
     isDarkMode
       ? 'bg-slate-900 border-slate-700/60'
       : 'bg-white border-slate-200'
@@ -593,7 +699,7 @@ function Sidebar({
       >
         {/* Backdrop */}
         <div
-          className={`absolute inset-0 bg-black/40 transition-opacity duration-250 ${
+          className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${
             isMobileOpen ? 'opacity-100' : 'opacity-0'
           }`}
           onClick={onRequestCloseMobile}
@@ -601,18 +707,18 @@ function Sidebar({
         />
         <aside
           ref={mobileSidebarRef}
-          className={`absolute left-0 top-0 bottom-0 w-64 ${
+          className={`absolute left-0 top-0 bottom-0 w-[min(18rem,calc(100vw-1rem))] sm:w-72 ${
             isDarkMode
               ? 'bg-slate-900 border-slate-700'
               : 'bg-white border-slate-200'
-          } border-r shadow-2xl transform transition-transform duration-250 ${
+          } border-r shadow-2xl transform transition-transform duration-300 ${
             isMobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
           aria-label="Menu lateral móvel"
           role="dialog"
           aria-modal="true"
         >
-          {renderSidebarContent()}
+          {renderSidebarContent({ forceExpanded: true })}
         </aside>
       </div>
 
@@ -625,7 +731,7 @@ function Sidebar({
         aria-label="Navegação inferior"
         style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
       >
-        <div className="grid grid-cols-4 gap-1 px-2 pt-2 pb-1 relative">
+        <div className="relative grid grid-cols-4 gap-1 px-2 pt-2 pb-1">
           {bottomNavGroups.map((grp) => {
             const isActive = grp.routes.includes(activeRoute);
             return (
@@ -634,7 +740,7 @@ function Sidebar({
                 type="button"
                 onClick={() => handleNavigate(grp.id)}
                 className={[
-                  'relative flex flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[11px] font-bold transition-all duration-300 cursor-pointer min-h-[56px] overflow-hidden group',
+                  'relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 text-[11px] font-semibold tracking-[0.01em] transition-all duration-300 overflow-hidden group',
                   isActive
                     ? isDarkMode
                       ? 'text-brand-primary'
@@ -647,17 +753,14 @@ function Sidebar({
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={grp.label}
               >
-                {/* Background Bubble Animado */}
                 <div 
                   className={`absolute inset-0 transition-transform duration-300 rounded-2xl ${isActive ? 'scale-100 opacity-100' : 'scale-50 opacity-0'} ${isDarkMode ? 'bg-brand-primary/10' : 'bg-brand-primary/10'}`}
                 />
                 
-                {/* Icone com animação de pulo */}
                 <div className={`relative transition-transform duration-300 ${isActive ? '-translate-y-1 scale-110' : 'group-active:scale-95'}`}>
-                  {grp.icon}
+                  {cloneMenuIcon(grp.icon, 'h-5.5 w-5.5')}
                 </div>
                 
-                {/* Label que sobe suavemente */}
                 <span 
                   className={`absolute bottom-1.5 w-full text-center leading-tight transition-all duration-300 ${isActive ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}
                 >
@@ -667,37 +770,38 @@ function Sidebar({
             );
           })}
 
-          {/* More button */}
-          <button
-            type="button"
-            onClick={onRequestOpenMobile}
-            className={[
-              'relative flex flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-[11px] font-bold transition-all duration-300 cursor-pointer min-h-[56px] overflow-hidden group',
-              isMoreActive
-                ? isDarkMode
-                  ? 'text-brand-primary'
-                  : 'text-brand-primary'
-                : isDarkMode
-                ? 'text-slate-400 hover:bg-slate-800/50'
-                : 'text-slate-500 hover:bg-slate-50',
-            ].join(' ')}
-            style={isMoreActive ? { color: 'var(--brand-primary)' } : undefined}
-            aria-label="Mais opções"
-          >
-            <div 
-              className={`absolute inset-0 transition-transform duration-300 rounded-2xl ${isMoreActive ? 'scale-100 opacity-100' : 'scale-50 opacity-0'} ${isDarkMode ? 'bg-brand-primary/10' : 'bg-brand-primary/10'}`}
-            />
-            
-            <div className={`relative transition-transform duration-300 ${isMoreActive ? '-translate-y-1 scale-110' : 'group-active:scale-95'}`}>
-              <Menu className="w-6 h-6" />
-            </div>
-            
-            <span 
-              className={`absolute bottom-1.5 w-full text-center leading-tight transition-all duration-300 ${isMoreActive ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}
+          {!allowedRoutes?.length && (
+            <button
+              type="button"
+              onClick={onRequestOpenMobile}
+              className={[
+                'relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 text-[11px] font-semibold tracking-[0.01em] transition-all duration-300 overflow-hidden group',
+                isMoreActive
+                  ? isDarkMode
+                    ? 'text-brand-primary'
+                    : 'text-brand-primary'
+                  : isDarkMode
+                  ? 'text-slate-400 hover:bg-slate-800/50'
+                  : 'text-slate-500 hover:bg-slate-50',
+              ].join(' ')}
+              style={isMoreActive ? { color: 'var(--brand-primary)' } : undefined}
+              aria-label="Mais opções"
             >
-              Mais
-            </span>
-          </button>
+              <div 
+                className={`absolute inset-0 transition-transform duration-300 rounded-2xl ${isMoreActive ? 'scale-100 opacity-100' : 'scale-50 opacity-0'} ${isDarkMode ? 'bg-brand-primary/10' : 'bg-brand-primary/10'}`}
+              />
+              
+              <div className={`relative transition-transform duration-300 ${isMoreActive ? '-translate-y-1 scale-110' : 'group-active:scale-95'}`}>
+                <Menu className="h-5.5 w-5.5" />
+              </div>
+              
+              <span 
+                className={`absolute bottom-1.5 w-full text-center leading-tight transition-all duration-300 ${isMoreActive ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}
+              >
+                Mais
+              </span>
+            </button>
+          )}
         </div>
       </nav>
     </>

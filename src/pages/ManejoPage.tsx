@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Edit3,
@@ -47,8 +47,10 @@ import {
   KnowledgeModule,
   UnifiedWeatherData,
 } from '@/types';
+import { useToast } from '@/components/ui/ToastProvider';
 import { KNOWLEDGE_MODULES } from '@/data/knowledge';
 import KnowledgeModulePage from '@/components/KnowledgeModulePage';
+import HealthRecordCard from '@/components/HealthRecordCard';
 import {
   buildHealthReport,
   buildMortalityReport,
@@ -318,6 +320,12 @@ function getCardTone(type: 'critical' | 'warning' | 'info' | 'success') {
   return 'border-blue-200 bg-blue-50 text-blue-700';
 }
 
+function normalizeHealthProcedureType(type: HealthRecord['procedureType']) {
+  if (type === 'vacina' || type === 'medicamento') return 'tratamento';
+  if (type === 'outro') return 'monitoramento';
+  return type;
+}
+
 export default function ManejoPage({
   section = 'registro',
   animals,
@@ -352,6 +360,7 @@ export default function ManejoPage({
   errorMessage,
   onRetry,
 }: ManejoModuleProps) {
+  const toast = useToast();
   const [activeSection, setActiveSection] = useState<ManejoSection>(section);
 
   const [editingGalpaoId, setEditingGalpaoId] = useState<string | null>(null);
@@ -363,6 +372,7 @@ export default function ManejoPage({
   const [isHealthFormOpen, setIsHealthFormOpen] = useState(false);
   const [editingHealthId, setEditingHealthId] = useState<string | null>(null);
   const [healthDraft, setHealthDraft] = useState<Omit<HealthRecord, 'id' | 'createdAt'>>(emptyHealthDraft);
+  const [healthHasNextDose, setHealthHasNextDose] = useState(false);
 
   const [editingStockId, setEditingStockId] = useState<string | null>(null);
   const [stockDraft, setStockDraft] = useState<Omit<VeterinaryStockRecord, 'id' | 'createdAt'>>(emptyStockDraft);
@@ -387,6 +397,11 @@ export default function ManejoPage({
     from: '',
     to: '',
   });
+
+  const notifyValidation = useCallback((message: string) => {
+    toast.warning('Revise os dados informados', message);
+    return false;
+  }, [toast]);
 
   const [stockSearch, setStockSearch] = useState('');
   const [mortalitySearch, setMortalitySearch] = useState('');
@@ -715,6 +730,7 @@ export default function ManejoPage({
   const resetHealthForm = () => {
     setEditingHealthId(null);
     setHealthDraft(emptyHealthDraft);
+    setHealthHasNextDose(false);
   };
 
   const resetStockForm = () => {
@@ -739,15 +755,15 @@ export default function ManejoPage({
 
   const handleSaveManejo = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!manejoDraft.date) return window.alert('Informe a data do registro.');
-    if (!manejoDraft.animalId) return window.alert('Selecione o lote.');
-    if (manejoDraft.ovosColetados < 0) return window.alert('A quantidade de ovos coletados não pode ser negativa.');
-    if (manejoDraft.ovosDanificados < 0) return window.alert('A quantidade de ovos danificados não pode ser negativa.');
+    if (!manejoDraft.date) return notifyValidation('Informe a data do registro.');
+    if (!manejoDraft.animalId) return notifyValidation('Selecione o lote.');
+    if (manejoDraft.ovosColetados < 0) return notifyValidation('A quantidade de ovos coletados não pode ser negativa.');
+    if (manejoDraft.ovosDanificados < 0) return notifyValidation('A quantidade de ovos danificados não pode ser negativa.');
     if (manejoDraft.ovosDanificados > manejoDraft.ovosColetados) {
-      return window.alert('A quantidade de ovos danificados não pode ser maior que a coletada.');
+      return notifyValidation('A quantidade de ovos danificados não pode ser maior que a coletada.');
     }
-    if (manejoDraft.racaoKg < 0) return window.alert('A quantidade de ração não pode ser negativa.');
-    if (manejoDraft.pesoMedioOvos < 0) return window.alert('O peso médio não pode ser negativo.');
+    if (manejoDraft.racaoKg < 0) return notifyValidation('A quantidade de ração não pode ser negativa.');
+    if (manejoDraft.pesoMedioOvos < 0) return notifyValidation('O peso médio não pode ser negativo.');
 
     // Deduct feed from stock if we have a selected formulation and racaoKg > 0
     if (manejoDraft.formulationId && manejoDraft.racaoKg > 0) {
@@ -800,10 +816,10 @@ export default function ManejoPage({
 
   const handleSaveDisponibilidade = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!disponibilidadeDraft.date) return window.alert('Informe a data.');
-    if (disponibilidadeDraft.galinhasVivas < 0) return window.alert('A quantidade de galinhas vivas não pode ser negativa.');
-    if (disponibilidadeDraft.galinhasLimpas < 0) return window.alert('A quantidade de galinhas limpas não pode ser negativa.');
-    if (disponibilidadeDraft.camaAviarioUnidades < 0) return window.alert('As unidades de cama de aviário não podem ser negativas.');
+    if (!disponibilidadeDraft.date) return notifyValidation('Informe a data.');
+    if (disponibilidadeDraft.galinhasVivas < 0) return notifyValidation('A quantidade de galinhas vivas não pode ser negativa.');
+    if (disponibilidadeDraft.galinhasLimpas < 0) return notifyValidation('A quantidade de galinhas limpas não pode ser negativa.');
+    if (disponibilidadeDraft.camaAviarioUnidades < 0) return notifyValidation('As unidades de cama de aviário não podem ser negativas.');
 
     await onSaveDisponibilidadeVenda({
       ...disponibilidadeDraft,
@@ -818,9 +834,9 @@ export default function ManejoPage({
 
   const handleSaveGalpao = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!galpaoDraft.name.trim()) return window.alert('Informe o nome do galpão.');
-    if (galpaoDraft.capacity <= 0) return window.alert('Informe a capacidade do galpão.');
-    if (galpaoDraft.currentBirdCount < 0) return window.alert('A quantidade atual de aves não pode ser negativa.');
+    if (!galpaoDraft.name.trim()) return notifyValidation('Informe o nome do galpão.');
+    if (galpaoDraft.capacity <= 0) return notifyValidation('Informe a capacidade do galpão.');
+    if (galpaoDraft.currentBirdCount < 0) return notifyValidation('A quantidade atual de aves não pode ser negativa.');
 
     await onSaveGalpao({
       ...galpaoDraft,
@@ -832,8 +848,8 @@ export default function ManejoPage({
 
   const handleSaveProfessional = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!professionalDraft.name.trim()) return window.alert('Informe o nome do profissional responsável.');
-    if (!professionalDraft.role.trim()) return window.alert('Informe a função do profissional.');
+    if (!professionalDraft.name.trim()) return notifyValidation('Informe o nome do profissional responsável.');
+    if (!professionalDraft.role.trim()) return notifyValidation('Informe a função do profissional.');
 
     await onSaveHealthProfessional({
       ...professionalDraft,
@@ -848,37 +864,130 @@ export default function ManejoPage({
 
   const handleSaveHealth = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!healthDraft.occurredAt) return window.alert('Informe a data e hora da intervenção.');
-    if (!healthDraft.animalId) return window.alert('Selecione o lote afetado.');
-    if (!healthDraft.galpaoId) return window.alert('Selecione o galpão relacionado.');
-    if (!healthDraft.professionalId) return window.alert('Selecione o profissional responsável.');
-    if (!healthDraft.title.trim()) return window.alert('Informe o procedimento realizado.');
-    if (healthDraft.affectedBirdCount <= 0) return window.alert('Informe a quantidade de aves afetadas.');
-    if (!healthDraft.notes.trim()) return window.alert('Registre observações detalhadas da intervenção.');
 
-    const professional = professionalMap.get(healthDraft.professionalId);
-    if (!canProfessionalManageHealth(professional)) {
-      return window.alert('O profissional selecionado não possui permissão para registrar ou editar dados de saúde.');
+    const normalizedProcedureType = normalizeHealthProcedureType(healthDraft.procedureType);
+
+    if (!healthDraft.occurredAt) {
+      notifyValidation('Informe a data e hora da intervenção.');
+      return false;
+    }
+    if (!healthDraft.animalId) {
+      notifyValidation('Selecione o lote afetado.');
+      return false;
+    }
+    if (!healthDraft.notes.trim()) {
+      notifyValidation('Registre observações detalhadas da intervenção.');
+      return false;
+    }
+
+    const requiresProfessional = normalizedProcedureType === 'consulta' || normalizedProcedureType === 'tratamento';
+
+    if (!healthDraft.galpaoId && normalizedProcedureType !== 'monitoramento') {
+      notifyValidation('Selecione o galpão relacionado.');
+      return false;
+    }
+
+    if (requiresProfessional && !healthDraft.professionalId) {
+      notifyValidation('Selecione o profissional responsável.');
+      return false;
+    }
+
+    const professional = healthDraft.professionalId ? professionalMap.get(healthDraft.professionalId) : undefined;
+    if (requiresProfessional && !canProfessionalManageHealth(professional)) {
+      notifyValidation('O profissional selecionado não possui permissão para registrar ou editar dados de saúde.');
+      return false;
+    }
+
+    if (normalizedProcedureType === 'consulta') {
+      if ((healthDraft.consultationCost ?? 0) < 0) {
+        notifyValidation('Informe um valor válido para a consulta.');
+        return false;
+      }
+    }
+
+    if (normalizedProcedureType === 'tratamento') {
+      if (!healthDraft.treatmentType) {
+        notifyValidation('Selecione se o tratamento é remédio ou vacina.');
+        return false;
+      }
+      if (!healthDraft.productName?.trim()) {
+        notifyValidation('Informe o nome do produto.');
+        return false;
+      }
+      if (!healthDraft.applicationMethod?.trim()) {
+        notifyValidation('Selecione a forma de aplicação.');
+        return false;
+      }
+      if ((healthDraft.affectedBirdCount ?? 0) <= 0) {
+        notifyValidation('Informe a quantidade de aves tratadas.');
+        return false;
+      }
+      if (healthHasNextDose && !healthDraft.nextDoseDate) {
+        notifyValidation('Informe a data da próxima dose.');
+        return false;
+      }
     }
 
     const animal = animalMap.get(healthDraft.animalId);
-    if (animal && healthDraft.affectedBirdCount > getAnimalCurrentQuantity(animal)) {
-      return window.alert('A quantidade de aves afetadas não pode ser maior que a população viva do lote.');
+    const normalizedAffectedBirdCount =
+      normalizedProcedureType === 'consulta'
+        ? (animal ? getAnimalCurrentQuantity(animal) : 0)
+        : (healthDraft.affectedBirdCount ?? 0);
+
+    if (animal && normalizedAffectedBirdCount > getAnimalCurrentQuantity(animal)) {
+      notifyValidation('A quantidade de aves afetadas não pode ser maior que a população viva do lote.');
+      return false;
     }
 
     await onSaveHealthRecord({
       ...healthDraft,
+      procedureType: normalizedProcedureType as HealthRecord['procedureType'],
+      title: healthDraft.title.trim() || getHealthProcedureLabel(normalizedProcedureType),
+      galpaoId: normalizedProcedureType === 'monitoramento' ? undefined : healthDraft.galpaoId,
+      professionalId: requiresProfessional ? healthDraft.professionalId : undefined,
+      affectedBirdCount: normalizedProcedureType === 'monitoramento' ? undefined : normalizedAffectedBirdCount,
+      consultationCost: normalizedProcedureType === 'consulta' ? healthDraft.consultationCost : undefined,
+      returnDate: normalizedProcedureType === 'consulta' ? healthDraft.returnDate : undefined,
+      treatmentType: normalizedProcedureType === 'tratamento' ? healthDraft.treatmentType : undefined,
+      productName: normalizedProcedureType === 'tratamento' ? healthDraft.productName : undefined,
+      applicationMethod: normalizedProcedureType === 'tratamento' ? healthDraft.applicationMethod : undefined,
+      treatmentDetails: normalizedProcedureType === 'tratamento' ? healthDraft.treatmentDetails : undefined,
+      nextDoseDate: normalizedProcedureType === 'tratamento' && healthHasNextDose ? healthDraft.nextDoseDate : undefined,
+      estimatedCost:
+        normalizedProcedureType === 'consulta'
+          ? (healthDraft.consultationCost ?? 0)
+          : (healthDraft.estimatedCost ?? 0),
       id: editingHealthId ?? crypto.randomUUID(),
-      createdAt: editingHealthId ? healthRecords.find((item) => item.id === editingHealthId)?.createdAt ?? new Date().toISOString() : new Date().toISOString(),
+      createdAt: editingHealthId
+        ? healthRecords.find((item) => item.id === editingHealthId)?.createdAt ?? new Date().toISOString()
+        : new Date().toISOString(),
     });
     resetHealthForm();
+    return true;
   };
+
+  const handleEditHealthRecord = useCallback((record: HealthRecord) => {
+    const { id, createdAt, ...rest } = record;
+    const normalizedProcedureType = normalizeHealthProcedureType(record.procedureType);
+    setEditingHealthId(id);
+    setHealthHasNextDose(Boolean(record.nextDoseDate));
+    setHealthDraft({ ...rest, procedureType: normalizedProcedureType });
+    setIsHealthFormOpen(true);
+    window.scrollTo({ top: 300, behavior: 'smooth' });
+  }, []);
+
+  const handleDeleteHealthRecord = useCallback(
+    (id: string) => {
+      void onDeleteHealthRecord(id);
+    },
+    [onDeleteHealthRecord],
+  );
 
   const handleSaveStock = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!stockDraft.name.trim()) return window.alert('Informe o nome do insumo veterinário.');
-    if (stockDraft.quantity < 0) return window.alert('A quantidade em estoque não pode ser negativa.');
-    if (stockDraft.minimumStock < 0) return window.alert('O estoque mínimo não pode ser negativo.');
+    if (!stockDraft.name.trim()) return notifyValidation('Informe o nome do insumo veterinário.');
+    if (stockDraft.quantity < 0) return notifyValidation('A quantidade em estoque não pode ser negativa.');
+    if (stockDraft.minimumStock < 0) return notifyValidation('O estoque mínimo não pode ser negativo.');
 
     await onSaveVeterinaryStock({
       ...stockDraft,
@@ -890,9 +999,9 @@ export default function ManejoPage({
 
   const handleSaveMortality = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!mortalityDraft.date) return window.alert('Informe a data da ocorrência.');
-    if (!mortalityDraft.animalId) return window.alert('Selecione o lote.');
-    if (mortalityDraft.deadCount <= 0) return window.alert('Informe a quantidade de perdas.');
+    if (!mortalityDraft.date) return notifyValidation('Informe a data da ocorrência.');
+    if (!mortalityDraft.animalId) return notifyValidation('Selecione o lote.');
+    if (mortalityDraft.deadCount <= 0) return notifyValidation('Informe a quantidade de perdas.');
 
     const animal = animalMap.get(mortalityDraft.animalId);
     const previousRecord = editingMortalityId ? mortalityRecords.find((item) => item.id === editingMortalityId) : undefined;
@@ -901,7 +1010,7 @@ export default function ManejoPage({
       (previousRecord && previousRecord.animalId === mortalityDraft.animalId ? previousRecord.deadCount : 0);
 
     if (animal && mortalityDraft.deadCount > availableBirds) {
-      return window.alert('A quantidade informada excede a população disponível no lote.');
+      return notifyValidation('A quantidade informada excede a população disponível no lote.');
     }
 
     const recordToSave = {
@@ -924,7 +1033,7 @@ export default function ManejoPage({
         attachments: [...prev.attachments, ...attachments].slice(0, 5),
       }));
     } catch {
-      window.alert('Não foi possível carregar os anexos selecionados.');
+      toast.error('Falha ao carregar anexos', 'Não foi possível processar os arquivos selecionados.');
     }
   };
 
@@ -932,12 +1041,12 @@ export default function ManejoPage({
     record.occurredAt.replace('T', ' '),
     HEALTH_PROCEDURE_LABELS[record.procedureType],
     animalMap.get(record.animalId)?.tag || 'Lote removido',
-    galpaoMap.get(record.galpaoId)?.name || 'Galpão removido',
-    professionalMap.get(record.professionalId)?.name || 'Responsável removido',
+    galpaoMap.get(record.galpaoId)?.name || '-',
+    professionalMap.get(record.professionalId)?.name || '-',
     record.title,
     record.diseaseName || '-',
-    String(record.affectedBirdCount),
-    currencyFormatter.format(record.estimatedCost),
+    record.procedureType === 'monitoramento' ? '-' : String(record.affectedBirdCount ?? 0),
+    record.procedureType === 'monitoramento' ? '-' : currencyFormatter.format(record.estimatedCost ?? 0),
     HEALTH_RECOVERY_LABELS[record.recoveryStatus],
   ]);
 
@@ -1845,7 +1954,10 @@ export default function ManejoPage({
                   <h3 className="text-sm font-bold text-[#0f1c2b] mb-4">
                     {editingHealthId ? 'Editar Intervenção' : 'Registrar Nova Intervenção'}
                   </h3>
-                  <form className="grid gap-4 md:grid-cols-2" onSubmit={(e) => { handleSaveHealth(e); setIsHealthFormOpen(false); }}>
+                  <form className="grid gap-4 md:grid-cols-2" onSubmit={async (e) => {
+                    const saved = await handleSaveHealth(e);
+                    if (saved) setIsHealthFormOpen(false);
+                  }}>
                 <label className="flex flex-col gap-1.5">
                   <span className="text-xs font-bold uppercase tracking-[0.08em] text-gray-500">Data e hora</span>
                   <input type="datetime-local" value={healthDraft.occurredAt} onChange={(event) => setHealthDraft((prev) => ({ ...prev, occurredAt: event.target.value }))} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
@@ -1897,21 +2009,25 @@ export default function ManejoPage({
                     ))}
                   </select>
                 </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-bold uppercase tracking-[0.08em] text-gray-500">Profissional autorizado</span>
-                  <select value={healthDraft.professionalId} onChange={(event) => setHealthDraft((prev) => ({ ...prev, professionalId: event.target.value }))} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary">
-                    <option value="">Selecione</option>
-                    {healthProfessionals.map((professional) => (
-                      <option key={professional.id} value={professional.id}>
-                        {professional.name} • {ACCESS_LABELS[professional.accessLevel]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-xs font-bold uppercase tracking-[0.08em] text-gray-500">Aves afetadas</span>
-                  <input type="number" min={0} value={healthDraft.affectedBirdCount} onChange={(event) => setHealthDraft((prev) => ({ ...prev, affectedBirdCount: Number(event.target.value || 0) }))} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
-                </label>
+                {healthDraft.procedureType !== 'monitoramento' && (
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-bold uppercase tracking-[0.08em] text-gray-500">Profissional autorizado</span>
+                    <select value={healthDraft.professionalId} onChange={(event) => setHealthDraft((prev) => ({ ...prev, professionalId: event.target.value }))} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary">
+                      <option value="">Selecione</option>
+                      {healthProfessionals.map((professional) => (
+                        <option key={professional.id} value={professional.id}>
+                          {professional.name} • {ACCESS_LABELS[professional.accessLevel]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {healthDraft.procedureType === 'tratamento' && (
+                  <label className="flex flex-col gap-1.5">
+                    <span className="text-xs font-bold uppercase tracking-[0.08em] text-gray-500">Aves afetadas</span>
+                    <input type="number" min={0} value={healthDraft.affectedBirdCount} onChange={(event) => setHealthDraft((prev) => ({ ...prev, affectedBirdCount: Number(event.target.value || 0) }))} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
+                  </label>
+                )}
                 
                 {/* Campos condicionais por tipo de procedimento */}
 
@@ -1957,23 +2073,18 @@ export default function ManejoPage({
                     </label>
                     <label className="flex flex-col gap-1.5">
                       <span className="text-xs font-bold uppercase tracking-[0.08em] text-gray-500">Próximas doses?</span>
-                      <select value={healthDraft.nextDoseDate ? 'sim' : 'nao'} onChange={(event) => {
-                        if (event.target.value === 'nao') {
-                          setHealthDraft((prev) => ({ ...prev, nextDoseDate: '' }));
-                        } else {
-                          // When selecting "Sim", initialize with empty string to show the date field
-                          if (!healthDraft.nextDoseDate) {
-                            setHealthDraft((prev) => ({ ...prev, nextDoseDate: '' }));
-                          }
-                        }
+                      <select value={healthHasNextDose ? 'sim' : 'nao'} onChange={(event) => {
+                        const enabled = event.target.value === 'sim';
+                        setHealthHasNextDose(enabled);
+                        setHealthDraft((prev) => ({ ...prev, nextDoseDate: enabled ? (prev.nextDoseDate || '') : undefined }));
                       }} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary">
                         <option value="nao">Não</option>
                         <option value="sim">Sim</option>
                       </select>
                     </label>
-                    {(healthDraft.nextDoseDate !== undefined && healthDraft.nextDoseDate !== null) ? (
+                    {healthHasNextDose ? (
                       <label className="flex flex-col gap-1.5 md:col-span-2">
-                        <span className="text-xs font-bold uppercase tracking-[0.08em] text-gray-500">Data da próxima dose</span>
+                        <span className="text-xs font-bold uppercase tracking-[0.08em] text-gray-500">Data da próxima dose *</span>
                         <input type="datetime-local" value={healthDraft.nextDoseDate || ''} onChange={(event) => setHealthDraft((prev) => ({ ...prev, nextDoseDate: event.target.value }))} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
                       </label>
                     ) : null}
@@ -2019,7 +2130,7 @@ export default function ManejoPage({
                   <textarea value={healthDraft.notes} onChange={(event) => setHealthDraft((prev) => ({ ...prev, notes: event.target.value }))} rows={4} className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary" />
                 </label>
                 <div className="md:col-span-2 flex flex-wrap gap-3">
-                  <button type="submit" disabled={isSyncing || authorizedProfessionals.length === 0} className="inline-flex items-center gap-2 rounded-full bg-brand-primary px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-hover disabled:opacity-60">
+                  <button type="submit" disabled={isSyncing || ((healthDraft.procedureType === 'consulta' || healthDraft.procedureType === 'tratamento') && authorizedProfessionals.length === 0)} className="inline-flex items-center gap-2 rounded-full bg-brand-primary px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-brand-hover disabled:opacity-60">
                     <Plus className="h-4 w-4" />
                     {editingHealthId ? 'Atualizar intervenção' : 'Salvar intervenção'}
                   </button>
@@ -2041,33 +2152,21 @@ export default function ManejoPage({
                   <div className="rounded-2xl border border-dashed border-gray-300 px-4 py-8 text-sm text-gray-500">Nenhum registro encontrado com os filtros atuais.</div>
                 ) : (
                   filteredHealthRecords.map((record) => (
-                    <div key={record.id} className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <div className="text-base font-extrabold text-[#0f1c2b]">{record.title}</div>
-                          <div className="mt-1 text-sm text-gray-500">
-                            {HEALTH_PROCEDURE_LABELS[record.procedureType]} • {record.occurredAt.replace('T', ' ')} • {animalMap.get(record.animalId)?.tag || 'Lote removido'} • {galpaoMap.get(record.galpaoId)?.name || 'Galpão removido'}
-                          </div>
-                          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-gray-500">
-                            <span className="rounded-full bg-white px-3 py-1">{professionalMap.get(record.professionalId)?.name || 'Responsável removido'}</span>
-                            <span className="rounded-full bg-white px-3 py-1">{record.affectedBirdCount} aves</span>
-                            <span className="rounded-full bg-white px-3 py-1">{HEALTH_RECOVERY_LABELS[record.recoveryStatus]}</span>
-                            <span className="rounded-full bg-white px-3 py-1">{currencyFormatter.format(record.estimatedCost)}</span>
-                          </div>
-                          {(record.diseaseName || record.notes) && <div className="mt-3 rounded-2xl bg-white px-4 py-3 text-sm text-gray-600">{record.diseaseName ? `${record.diseaseName}. ` : ''}{record.notes}</div>}
-                        </div>
-                        <div className="flex gap-2">
-                          <button type="button" onClick={() => { const { id, createdAt, ...rest } = record; setEditingHealthId(id); setHealthDraft(rest); setIsHealthFormOpen(true); window.scrollTo({ top: 300, behavior: 'smooth' }); }} className="inline-flex items-center gap-2 rounded-full border border-gray-300 px-4 py-2 text-xs font-bold text-gray-700 transition-colors hover:bg-white">
-                            <Edit3 className="h-4 w-4" />
-                            Editar
-                          </button>
-                          <button type="button" onClick={() => void onDeleteHealthRecord(record.id)} disabled={isSyncing} className="inline-flex items-center gap-2 rounded-full border border-red-300 px-4 py-2 text-xs font-bold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60">
-                            <Trash2 className="h-4 w-4" />
-                            Excluir
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                    <HealthRecordCard
+                      key={record.id}
+                      record={record}
+                      procedureLabel={HEALTH_PROCEDURE_LABELS[record.procedureType]}
+                      animalLabel={animalMap.get(record.animalId)?.tag || 'Lote removido'}
+                      galpaoLabel={galpaoMap.get(record.galpaoId)?.name || 'Galpão removido'}
+                      professionalLabel={professionalMap.get(record.professionalId)?.name || 'Sem profissional'}
+                      recoveryLabel={HEALTH_RECOVERY_LABELS[record.recoveryStatus]}
+                      formattedCost={(record.estimatedCost ?? 0) > 0 ? currencyFormatter.format(record.estimatedCost ?? 0) : null}
+                      showProfessional={record.procedureType === 'consulta' || record.procedureType === 'tratamento' || record.procedureType === 'vacina' || record.procedureType === 'medicamento'}
+                      showAffectedBirds={record.procedureType === 'tratamento' || record.procedureType === 'vacina' || record.procedureType === 'medicamento'}
+                      onEdit={handleEditHealthRecord}
+                      onDelete={handleDeleteHealthRecord}
+                      isSyncing={isSyncing}
+                    />
                   ))
                 )}
               </div>
