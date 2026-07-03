@@ -105,6 +105,19 @@ interface OpenWeatherProxyResponse {
   error?: string;
 }
 
+interface OpenMeteoProxyResponse {
+  data?: OpenMeteoResponse;
+  locationName?: string;
+  error?: string;
+}
+
+interface WeatherCachePayload {
+  version: 1;
+  locationKey?: string;
+  savedAt: string;
+  data: UnifiedWeatherData;
+}
+
 // --- Helpers: Weather Code Mappings ---
 
 function getOpenMeteoDescription(code: number): string {
@@ -162,6 +175,53 @@ function getDayName(dateStr: string): string {
   return dayNames[date.getDay()];
 }
 
+export function getWeatherCacheKey(lat: number, lon: number): string {
+  return `${lat.toFixed(4)},${lon.toFixed(4)}`;
+}
+
+export function readWeatherCache(expectedLocationKey?: string): UnifiedWeatherData | null {
+  if (typeof window === 'undefined') return null;
+
+  const cached = localStorage.getItem('climaLocal');
+  if (!cached) return null;
+
+  try {
+    const parsed = JSON.parse(cached) as Partial<WeatherCachePayload | UnifiedWeatherData>;
+    if ('data' in parsed && parsed.data) {
+      if (expectedLocationKey && parsed.locationKey !== expectedLocationKey) {
+        return null;
+      }
+      return parsed.data as UnifiedWeatherData;
+    }
+
+    if (expectedLocationKey) {
+      // Legacy cache format did not store location metadata, so ignore it when a city is explicitly configured.
+      return null;
+    }
+
+    if ('location' in parsed && 'temperature' in parsed) {
+      return parsed as UnifiedWeatherData;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+export function writeWeatherCache(data: UnifiedWeatherData, locationKey?: string) {
+  if (typeof window === 'undefined') return;
+
+  const payload: WeatherCachePayload = {
+    version: 1,
+    locationKey,
+    savedAt: new Date().toISOString(),
+    data,
+  };
+
+  localStorage.setItem('climaLocal', JSON.stringify(payload));
+}
+
 // --- Fetch Functions ---
 
 async function fetchFromOpenMeteo(
@@ -171,11 +231,30 @@ async function fetchFromOpenMeteo(
 ): Promise<UnifiedWeatherData> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-  const response = await fetch(
-    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,surface_pressure,wind_speed_10m,wind_direction_10m,weather_code,uv_index,precipitation,cloud_cover&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto&forecast_days=5`,
-    { signal: controller.signal }
-  );
+  const endpoint = new URL('/api/weather/open-meteo', window.location.origin);
+  endpoint.searchParams.set('lat', String(lat));
+  endpoint.searchParams.set('lon', String(lon));
+  endpoint.searchParams.set('locationName', locationName);
+  const session = supabase ? await supabase.auth.getSession() : null;
+  const accessToken = session?.data.session?.access_token;
+  let response: Response;
+  try {
+    response = await fetch(
+      endpoint.toString(),
+      {
+        signal: controller.signal,
+        credentials: 'same-origin',
+        headers: accessToken
+          ? {
+              Authorization: `Bearer ${accessToken}`,
+            }
+          : undefined,
+      }
+    );
+  } catch (error) {
+    clearTimeout(timeoutId);
+    throw error;
+  }
 
   clearTimeout(timeoutId);
 
@@ -183,7 +262,12 @@ async function fetchFromOpenMeteo(
     throw new Error(`Open-Meteo: HTTP Error ${response.status}`);
   }
 
-  const data: OpenMeteoResponse = await response.json();
+  const payload = (await response.json()) as OpenMeteoProxyResponse;
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.error || `Open-Meteo proxy: HTTP Error ${response.status}`);
+  }
+
+  const data = payload.data;
 
   // Process 12h forecast
   const now = new Date();
@@ -200,6 +284,68 @@ async function fetchFromOpenMeteo(
     .slice(0, 12);
 
   // Process 5-day forecast
+  const forecast5d = data.daily.time.map((dateStr, index) => ({
+    date: dateStr,
+    dayName: getDayName(dateStr),
+    tempMin: data.daily.temperature_2m_min[index],
+    tempMax: data.daily.temperature_2m_max[index],
+    weatherCode: data.daily.weather_code[index],
+  }));
+
+  return {
+    temperature: data.current.temperature_2m,
+    feelsLike: data.current.apparent_temperature,
+    temperatureMax: data.daily.temperature_2m_max[0],
+    temperatureMin: data.daily.temperature_2m_min[0],
+    humidity: data.current.relative_humidity_2m,
+    windSpeed: data.current.wind_speed_10m,
+    windDirection: data.current.wind_direction_10m,
+    pressure: data.current.surface_pressure,
+    visibility: 10,
+    sunrise: new Date(data.daily.sunrise[0]).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    sunset: new Date(data.daily.sunset[0]).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    description: getOpenMeteoDescription(data.current.weather_code),
+    weatherCode: data.current.weather_code,
+    uvIndex: data.current.uv_index,
+    precipitation: data.current.precipitation,
+    cloudCover: data.current.cloud_cover,
+    forecast12h,
+    forecast5d,
+    location: payload.locationName || locationName,
+    lastUpdated: new Date().toISOString(),
+    source: 'open-meteo'
+  };
+}
+
+async function fetchFromOpenMeteoDirect(
+  lat: number,
+  lon: number,
+  locationName: string
+): Promise<UnifiedWeatherData> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const response = await fetch(
+    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,surface_pressure,wind_speed_10m,wind_direction_10m,weather_code,uv_index,precipitation,cloud_cover&hourly=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto&forecast_days=5`,
+    { signal: controller.signal }
+  );
+
+  clearTimeout(timeoutId);
+
+  if (!response.ok) {
+    throw new Error(`Open-Meteo direto: HTTP Error ${response.status}`);
+  }
+
+  const data: OpenMeteoResponse = await response.json();
+  const now = new Date();
+  const forecast12h = data.hourly.time
+    .map((time, index) => ({
+      time: new Date(time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      temperature: data.hourly.temperature_2m[index],
+      weatherCode: data.hourly.weather_code[index],
+    }))
+    .filter((_, index) => new Date(data.hourly.time[index]) > now)
+    .slice(0, 12);
+
   const forecast5d = data.daily.time.map((dateStr, index) => ({
     date: dateStr,
     dayName: getDayName(dateStr),
@@ -333,10 +479,15 @@ export async function getWeatherData(
   try {
     return await fetchFromOpenMeteo(lat, lon, locationName);
   } catch (primaryErr) {
-    console.warn('[WeatherService] Open-Meteo failed, trying secure OpenWeather fallback');
+    try {
+      return await fetchFromOpenMeteoDirect(lat, lon, locationName);
+    } catch (directErr) {
+      void directErr;
+    }
     try {
       return await fetchFromOpenWeatherProxy(lat, lon, locationName);
-    } catch {
+    } catch (fallbackErr) {
+      void fallbackErr;
       throw new Error('Ambas fontes de dados meteorológicas falharam');
     }
   }

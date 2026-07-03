@@ -104,7 +104,7 @@ export default function InicioPage({
           setWeatherData(data);
         }
       } catch (err) {
-        console.error('Failed to load weather', err);
+        void err;
       }
     }
     loadWeather();

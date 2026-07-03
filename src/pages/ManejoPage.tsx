@@ -67,6 +67,7 @@ import {
   getNextDoseAlerts,
   getHealthProcedureLabel,
 } from '@/lib/manejo';
+import { readWeatherCache } from '@/lib/weather';
 import { exportRowsToExcel, exportRowsToPdf } from '@/lib/exportUtils';
 
 export type ManejoSection = 'registro' | 'disponibilidade' | 'historico' | 'recomendacoes' | 'saude' | 'mortalidade';
@@ -416,13 +417,9 @@ export default function ManejoPage({
   const [weatherData, setWeatherData] = useState<UnifiedWeatherData | null>(null);
 
   useEffect(() => {
-    const cached = localStorage.getItem('climaLocal');
+    const cached = readWeatherCache();
     if (cached) {
-      try {
-        setWeatherData(JSON.parse(cached));
-      } catch (e) {
-        console.error(e);
-      }
+      setWeatherData(cached);
     }
 
     if ('BroadcastChannel' in window) {

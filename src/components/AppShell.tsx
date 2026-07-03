@@ -618,7 +618,7 @@ export default function AppShell({
           eggSalePrice: Number(granja.egg_sale_price ?? 0),
           birdSalePrice: Number(granja.bird_sale_price ?? 0),
           litterSalePrice: Number(granja.litter_sale_price ?? 0),
-          weather: {
+          weather: appState.systemSettings.weather || {
             display: {
               currentTemp: true,
               feelsLike: true,

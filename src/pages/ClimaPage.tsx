@@ -22,7 +22,7 @@ import {
   Compass
 } from 'lucide-react';
 import type { SystemSettingsData, UnifiedWeatherData } from '@/types';
-import { getWeatherData, reverseGeocode } from '@/lib/weather';
+import { getWeatherCacheKey, getWeatherData, readWeatherCache, reverseGeocode, writeWeatherCache } from '@/lib/weather';
 
 const WeatherIcon = ({ code, size = 24, className = '' }: { code: number; size?: number; className?: string }) => {
   if (code >= 95) return <CloudLightning size={size} className={className} />;
@@ -67,15 +67,18 @@ export default function ClimaPage({ settings }: { settings: SystemSettingsData }
   const [error, setError] = useState<string | null>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [alerts, setAlerts] = useState<{ type: 'calor' | 'frio' | 'vento'; message: string; level: 'alta' }[]>([]);
+  const expectedCacheKey = useMemo(
+    () =>
+      weatherConfig.defaultCity
+        ? getWeatherCacheKey(weatherConfig.defaultCity.lat, weatherConfig.defaultCity.lon)
+        : undefined,
+    [weatherConfig.defaultCity]
+  );
 
   useEffect(() => {
-    const cached = localStorage.getItem('climaLocal');
-    if (cached) {
-      try {
-        setWeatherData(JSON.parse(cached));
-      } catch {}
-    }
-  }, []);
+    const cached = readWeatherCache(expectedCacheKey);
+    setWeatherData(cached);
+  }, [expectedCacheKey]);
 
   useEffect(() => {
     if ('BroadcastChannel' in window && weatherData) {
@@ -113,7 +116,7 @@ export default function ClimaPage({ settings }: { settings: SystemSettingsData }
       try {
         const data = await getWeatherData(lat, lon, locName);
         setWeatherData(data);
-        localStorage.setItem('climaLocal', JSON.stringify(data));
+        writeWeatherCache(data, getWeatherCacheKey(lat, lon));
         checkAlerts(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Erro ao carregar');

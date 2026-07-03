@@ -10,6 +10,7 @@ import billingCreateCheckoutSessionHandler from './api/billing/create-checkout-s
 import billingCreatePortalSessionHandler from './api/billing/create-portal-session.js';
 import billingSubscriptionStatusHandler from './api/billing/subscription-status.js';
 import stripeWebhookHandler from './api/stripe/webhook.js';
+import { handleOpenMeteoProxy } from './server/open-meteo-proxy.js';
 import { handleOpenWeatherProxy } from './server/openweather-proxy.js';
 
 dotenv.config();
@@ -68,7 +69,7 @@ function apiDevProxy() {
           return;
         }
 
-        if (!req.url?.startsWith('/api/weather/openweather')) {
+        if (!req.url?.startsWith('/api/weather/open-meteo') && !req.url?.startsWith('/api/weather/openweather')) {
           next();
           return;
         }
@@ -81,7 +82,10 @@ function apiDevProxy() {
           return;
         }
 
-        const { status, payload } = await handleOpenWeatherProxy(`http://localhost${req.url}`);
+        const handler = req.url?.startsWith('/api/weather/open-meteo')
+          ? handleOpenMeteoProxy
+          : handleOpenWeatherProxy;
+        const { status, payload } = await handler(`http://localhost${req.url}`);
         res.statusCode = status;
         res.setHeader('Cache-Control', 'private, max-age=0');
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -185,7 +189,7 @@ export default defineConfig(() => {
         'X-Frame-Options': 'SAMEORIGIN',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
-        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()'
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self), payment=()'
       }
     },
     preview: {
@@ -194,7 +198,7 @@ export default defineConfig(() => {
         'X-Frame-Options': 'SAMEORIGIN',
         'X-Content-Type-Options': 'nosniff',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
-        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=()'
+        'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self), payment=()'
       }
     }
   };
