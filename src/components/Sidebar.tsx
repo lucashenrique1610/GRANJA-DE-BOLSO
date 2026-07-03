@@ -403,7 +403,9 @@ function Sidebar({
 
   const visibleCategories = useMemo(() => {
     if (!allowedRoutes?.length) {
-      return categories;
+      return categories.filter(
+        (category) => category.kind !== 'single' || category.item.id !== 'admin'
+      );
     }
 
     const allowedRouteSet = new Set<RouteId>(allowedRoutes);
