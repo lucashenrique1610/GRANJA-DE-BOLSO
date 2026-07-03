@@ -1,22 +1,10 @@
 import { listAdminUsersOverview } from '../../server/admin-store.js';
-import { authenticateRequest, authorizeAppRole } from '../../server/auth.js';
+import { withRole } from '../../server/auth.js';
 
-export default async function handler(req, res) {
+export default withRole('admin', async function handler(req, res, authResult) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     res.status(405).json({ error: 'Metodo nao permitido.' });
-    return;
-  }
-
-  const authResult = await authenticateRequest(req.headers);
-  if ('status' in authResult) {
-    res.status(authResult.status).json(authResult.payload);
-    return;
-  }
-
-  const authorizationResult = authorizeAppRole(authResult, 'admin');
-  if ('status' in authorizationResult) {
-    res.status(authorizationResult.status).json(authorizationResult.payload);
     return;
   }
 
@@ -32,4 +20,4 @@ export default async function handler(req, res) {
           : 'Falha ao carregar o painel administrativo.',
     });
   }
-}
+});

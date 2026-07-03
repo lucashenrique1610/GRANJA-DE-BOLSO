@@ -103,3 +103,33 @@ export function authorizeAppRole(context, requiredRole) {
       : 'Acesso restrito a moderadores e administradores.',
   });
 }
+
+/**
+ * Middleware HOF para proteger rotas com autenticação.
+ * Passa o authResult para o handler no terceiro argumento.
+ */
+export function withAuth(handler) {
+  return async (req, res) => {
+    const authResult = await authenticateRequest(req.headers);
+    if ('status' in authResult) {
+      res.status(authResult.status).json(authResult.payload);
+      return;
+    }
+    return handler(req, res, authResult);
+  };
+}
+
+/**
+ * Middleware HOF para proteger rotas com role específica.
+ * Já inclui a verificação de autenticação (withAuth internamente).
+ */
+export function withRole(requiredRole, handler) {
+  return withAuth(async (req, res, authResult) => {
+    const roleResult = authorizeAppRole(authResult, requiredRole);
+    if ('status' in roleResult) {
+      res.status(roleResult.status).json(roleResult.payload);
+      return;
+    }
+    return handler(req, res, authResult);
+  });
+}

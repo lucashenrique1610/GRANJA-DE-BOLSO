@@ -12,6 +12,7 @@ import billingSubscriptionStatusHandler from './api/billing/subscription-status.
 import stripeWebhookHandler from './api/stripe/webhook.js';
 import { handleOpenMeteoProxy } from './server/open-meteo-proxy.js';
 import { handleOpenWeatherProxy } from './server/openweather-proxy.js';
+import { authenticateRequest } from './server/auth.js';
 
 dotenv.config();
 
@@ -79,6 +80,14 @@ function apiDevProxy() {
           res.setHeader('Allow', 'GET');
           res.setHeader('Content-Type', 'application/json; charset=utf-8');
           res.end(JSON.stringify({ error: 'Metodo nao permitido.' }));
+          return;
+        }
+
+        const authResult = await authenticateRequest(req.headers);
+        if ('status' in authResult) {
+          res.statusCode = authResult.status;
+          res.setHeader('Content-Type', 'application/json; charset=utf-8');
+          res.end(JSON.stringify(authResult.payload));
           return;
         }
 

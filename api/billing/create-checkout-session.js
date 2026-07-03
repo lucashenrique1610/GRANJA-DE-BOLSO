@@ -1,4 +1,4 @@
-import { authenticateRequest } from '../../server/auth.js';
+import { withAuth } from '../../server/auth.js';
 import { resolveConfiguredPlan } from '../../server/billing-config.js';
 import {
   ensureBillingServerConfiguration,
@@ -8,16 +8,10 @@ import {
   readJsonBody,
 } from '../../server/billing-store.js';
 
-export default async function handler(req, res) {
+export default withAuth(async function handler(req, res, authResult) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     res.status(405).json({ error: 'Metodo nao permitido.' });
-    return;
-  }
-
-  const authResult = await authenticateRequest(req.headers);
-  if ('status' in authResult) {
-    res.status(authResult.status).json(authResult.payload);
     return;
   }
 
@@ -89,4 +83,4 @@ export default async function handler(req, res) {
       error: error instanceof Error ? error.message : 'Falha ao iniciar o checkout da assinatura.',
     });
   }
-}
+});
