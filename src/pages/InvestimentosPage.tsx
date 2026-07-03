@@ -15,6 +15,196 @@ import {
 } from 'lucide-react';
 import { InvestmentCategory, InvestmentItem, InvestmentProject } from '@/types';
 
+type CalcFase = 'postura' | 'corte';
+type CalcSistema = 'caipira' | 'intensivo';
+type CalcPiquete = 'recomendado' | 'minimo' | 'extensivo';
+
+type EstimateModules = {
+  infraestrutura: boolean;
+  equipamentos: boolean;
+  alimentacao_sanidade: boolean;
+  aves: boolean;
+};
+
+type EstimateItemDraft = Pick<InvestmentItem, 'categoria' | 'descricao' | 'quantidade' | 'precoUnitario'>;
+
+type OfficialEstimateOptions = {
+  aves: number;
+  fase: CalcFase;
+  sistema: CalcSistema;
+  piquete: CalcPiquete;
+  incluirMaoDeObra: boolean;
+  incluirLegalizacao: boolean;
+  modulos: EstimateModules;
+};
+
+const getDensity = (fase: CalcFase, sistema: CalcSistema) =>
+  sistema === 'caipira'
+    ? fase === 'postura'
+      ? 6
+      : 10
+    : fase === 'postura'
+    ? 10
+    : 14;
+
+const getStructureDimensions = (aves: number, fase: CalcFase, sistema: CalcSistema) => {
+  const densidade = getDensity(fase, sistema);
+  const areaM2 = Math.max(0, Math.ceil(aves / densidade));
+  const largura = areaM2 === 0 ? 0 : areaM2 <= 50 ? 5 : areaM2 <= 100 ? 8 : 10;
+  const comprimento = largura === 0 ? 0 : Math.ceil(areaM2 / largura);
+
+  return {
+    densidade,
+    areaM2,
+    largura,
+    comprimento,
+    areaConstruidaM2: largura * comprimento,
+  };
+};
+
+const buildOfficialEstimate = ({
+  aves,
+  fase,
+  sistema,
+  piquete,
+  incluirMaoDeObra,
+  incluirLegalizacao,
+  modulos,
+}: OfficialEstimateOptions) => {
+  const dimensions = getStructureDimensions(aves, fase, sistema);
+  const baseDimensions = getStructureDimensions(100, fase, sistema);
+  const areaPiquete = sistema === 'caipira' ? aves * (piquete === 'minimo' ? 0.5 : piquete === 'recomendado' ? 2 : 10) : 0;
+  const proporcaoArea =
+    baseDimensions.areaConstruidaM2 > 0 ? dimensions.areaConstruidaM2 / baseDimensions.areaConstruidaM2 : 0;
+  const f = aves / 100;
+  const fatorCercaPiquete = sistema !== 'caipira' ? 0 : piquete === 'extensivo' ? f * 1.5 : f;
+  const comedouros = Math.ceil(aves / 35);
+  const bebedouros = Math.ceil(aves / 50);
+  const ninhos = fase === 'postura' ? Math.ceil(aves / 7) : 0;
+  const poleiros = fase === 'postura' ? Math.ceil(aves * 0.15) : 0;
+  const kgRacaoPorAve = fase === 'postura' ? 8 : 4.5;
+  const precoSacoRacao = fase === 'postura' ? 170 : 185;
+  const precoAve = fase === 'postura' ? 6.5 : 3.5;
+  const racaoSacos = Math.ceil((aves * kgRacaoPorAve) / 50);
+  const apoioHidraulico = aves > 0 ? Math.max(1, Math.ceil(aves / 200)) : 0;
+  const items: EstimateItemDraft[] = [];
+
+  const addItem = (item: EstimateItemDraft) => {
+    if (item.quantidade > 0) {
+      items.push(item);
+    }
+  };
+
+  if (modulos.infraestrutura) {
+    addItem({ categoria: 'infraestrutura', descricao: 'Pilares de eucalipto tratado (5,5 m, bitola 18)', precoUnitario: 265, quantidade: Math.ceil(4 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Pilares centrais de eucalipto tratado (6 m, bitola 18)', precoUnitario: 290, quantidade: Math.ceil(2 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Travessas de eucalipto tratado (6 m, bitola 10-12)', precoUnitario: 100, quantidade: Math.ceil(4 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Caibros de eucalipto tratado (5 m, bitola 8-10)', precoUnitario: 57.5, quantidade: Math.ceil(10 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Ripas de madeira para telhado (metros)', precoUnitario: 7.5, quantidade: Math.ceil(20 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Telhas de fibrocimento (2,44 m, 6 mm)', precoUnitario: 77.5, quantidade: Math.ceil(10 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Telhas de fibrocimento (1,53 m, 6 mm)', precoUnitario: 57.5, quantidade: Math.ceil(10 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Cumeeiras de fibrocimento', precoUnitario: 45, quantidade: Math.ceil(2 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Parafusos para telha com vedação (pct)', precoUnitario: 40, quantidade: Math.ceil(1 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Manta térmica ou pintura refletiva simples', precoUnitario: 275, quantidade: Math.ceil(1 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Blocos de concreto (14 x 19 x 39 cm)', precoUnitario: 4.25, quantidade: Math.ceil(104 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Cimento (saco 50 kg)', precoUnitario: 37.5, quantidade: Math.ceil(8 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Areia (m³)', precoUnitario: 140, quantidade: Math.ceil(1 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Brita (m³)', precoUnitario: 140, quantidade: Math.ceil(2 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Calha de PVC para água da chuva (m)', precoUnitario: 22.5, quantidade: Math.ceil(6 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Rufos e acabamentos (m)', precoUnitario: 17.5, quantidade: Math.ceil(6 * proporcaoArea) });
+    addItem({ categoria: 'outros', descricao: 'Cama aviária inicial (maravalha/casca de arroz)', precoUnitario: 375, quantidade: Math.ceil(1 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Fiação cabos 2,5 mm e 1,5 mm (m)', precoUnitario: 4.5, quantidade: Math.ceil(50 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Disjuntores', precoUnitario: 25, quantidade: Math.ceil(2 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Tomadas simples', precoUnitario: 15, quantidade: Math.ceil(2 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Lâmpadas LED para iluminação geral', precoUnitario: 30, quantidade: Math.ceil(2 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Interruptores', precoUnitario: 15, quantidade: Math.ceil(1 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Eletrodutos e acessórios (kit)', precoUnitario: 100, quantidade: Math.ceil(1 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Tubulação PVC 25 mm (m)', precoUnitario: 11.5, quantidade: Math.ceil(20 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Conexões PVC (kit)', precoUnitario: 50, quantidade: Math.ceil(1 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Caixa d’água (500 L)', precoUnitario: 350, quantidade: apoioHidraulico });
+    addItem({ categoria: 'infraestrutura', descricao: 'Registros de esfera', precoUnitario: 30, quantidade: Math.ceil(2 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Boia para caixa d’água', precoUnitario: 30, quantidade: apoioHidraulico });
+    addItem({ categoria: 'infraestrutura', descricao: 'Filtro simples de entrada', precoUnitario: 140, quantidade: apoioHidraulico });
+    addItem({ categoria: 'infraestrutura', descricao: 'Tela galvanizada fio 14 (1,5m altura) (m)', precoUnitario: 14, quantidade: Math.ceil(16 * proporcaoArea) });
+    addItem({ categoria: 'infraestrutura', descricao: 'Portão de tela simples para galpão', precoUnitario: 150, quantidade: 1 });
+    addItem({ categoria: 'infraestrutura', descricao: 'Cortinas/lonas laterais contra chuva/vento', precoUnitario: 275, quantidade: Math.ceil(1 * proporcaoArea) });
+
+    if (sistema === 'caipira') {
+      addItem({ categoria: 'infraestrutura', descricao: 'Postes de eucalipto para piquete', precoUnitario: 22.5, quantidade: Math.ceil(35 * fatorCercaPiquete) });
+      addItem({ categoria: 'infraestrutura', descricao: 'Tela para piquete (1,0m altura) (m)', precoUnitario: 11.5, quantidade: Math.ceil(120 * fatorCercaPiquete) });
+      addItem({ categoria: 'infraestrutura', descricao: 'Arame e grampos para cerca (kit)', precoUnitario: 145, quantidade: Math.ceil(1 * fatorCercaPiquete) });
+      addItem({ categoria: 'infraestrutura', descricao: 'Portões para piquetes', precoUnitario: 225, quantidade: Math.ceil(2 * (fatorCercaPiquete < 1 ? 1 : fatorCercaPiquete)) });
+    }
+
+    if (incluirMaoDeObra) {
+      addItem({ categoria: 'mao_de_obra', descricao: 'Mão de obra básica da estrutura', precoUnitario: 1750, quantidade: Math.ceil(1 * proporcaoArea) });
+      addItem({ categoria: 'mao_de_obra', descricao: 'Serviço de eletricista', precoUnitario: 550, quantidade: Math.ceil(1 * proporcaoArea) });
+      addItem({ categoria: 'mao_de_obra', descricao: 'Serviço hidráulico', precoUnitario: 475, quantidade: Math.ceil(1 * proporcaoArea) });
+    }
+  }
+
+  if (modulos.equipamentos) {
+    addItem({ categoria: 'equipamentos', descricao: 'Lâmpada/campânula de aquecimento', precoUnitario: 115, quantidade: Math.ceil(1 * f) });
+    addItem({ categoria: 'equipamentos', descricao: 'Temporizador para programa de luz', precoUnitario: 105, quantidade: 1 });
+    addItem({ categoria: 'equipamentos', descricao: 'Bebedouros pendulares automáticos', precoUnitario: 105, quantidade: bebedouros });
+    addItem({ categoria: 'equipamentos', descricao: 'Comedouros tubulares de 20 kg', precoUnitario: 95, quantidade: comedouros });
+    addItem({ categoria: 'equipamentos', descricao: 'Círculo de proteção/pinteiro', precoUnitario: 225, quantidade: Math.ceil(1 * f) });
+    addItem({ categoria: 'equipamentos', descricao: 'Ovoscópio simples', precoUnitario: 200, quantidade: 1 });
+    addItem({ categoria: 'equipamentos', descricao: 'Balança digital para ovos e ração', precoUnitario: 175, quantidade: 1 });
+    addItem({ categoria: 'equipamentos', descricao: 'Ferramentas (pá, vassoura, carrinho, etc)', precoUnitario: 455, quantidade: 1 });
+
+    if (ninhos > 0) {
+      addItem({ categoria: 'equipamentos', descricao: 'Ninhos individuais', precoUnitario: 50, quantidade: ninhos });
+    }
+
+    if (poleiros > 0) {
+      addItem({ categoria: 'equipamentos', descricao: 'Poleiros de madeira (m lineares)', precoUnitario: 17.5, quantidade: poleiros });
+    }
+  }
+
+  if (modulos.alimentacao_sanidade) {
+    addItem({ categoria: 'outros', descricao: `Ração ${fase === 'postura' ? 'até a postura' : 'até o abate'} (sacos 50kg)`, precoUnitario: precoSacoRacao, quantidade: racaoSacos });
+    addItem({ categoria: 'outros', descricao: 'Vacinas (Newcastle, Bronquite, Bouba, etc)', precoUnitario: 350, quantidade: Math.ceil(1 * f) });
+    addItem({ categoria: 'outros', descricao: 'Vitaminas, vermífugos e antissépticos', precoUnitario: 235, quantidade: Math.ceil(1 * f) });
+    addItem({ categoria: 'outros', descricao: 'Produtos de Limpeza (Desinfetante, Cal, Detergente)', precoUnitario: 185, quantidade: Math.ceil(1 * f) });
+    addItem({ categoria: 'outros', descricao: 'EPIs (Botas, Luvas, Máscaras)', precoUnitario: 170, quantidade: Math.ceil(1 * (f < 1 ? 1 : f)) });
+
+    if (incluirMaoDeObra) {
+      addItem({ categoria: 'mao_de_obra', descricao: 'Consultoria veterinária inicial', precoUnitario: 550, quantidade: 1 });
+    }
+  }
+
+  if (incluirLegalizacao) {
+    addItem({ categoria: 'licencas', descricao: 'Embalagens e Bandejas (Lotes)', precoUnitario: 260, quantidade: Math.ceil(1 * f) });
+    addItem({ categoria: 'licencas', descricao: 'Rótulos, carimbos e etiquetas', precoUnitario: 525, quantidade: 1 });
+    addItem({ categoria: 'licencas', descricao: 'Taxas, registros e adequações sanitárias', precoUnitario: 1750, quantidade: 1 });
+  }
+
+  if (modulos.aves) {
+    addItem({ categoria: 'outros', descricao: `Pintainhos de 1 dia (${fase === 'postura' ? 'Postura' : 'Corte'})`, precoUnitario: precoAve, quantidade: Math.ceil(aves * 1.05) });
+  }
+
+  const custoBase = items.reduce((sum, item) => sum + item.precoUnitario * item.quantidade, 0);
+
+  return {
+    items,
+    metrics: {
+      densidade: dimensions.densidade,
+      areaM2: dimensions.areaM2,
+      areaConstruidaM2: dimensions.areaConstruidaM2,
+      largura: dimensions.largura,
+      comprimento: dimensions.comprimento,
+      areaPiquete,
+      comedouros,
+      bebedouros,
+      ninhos,
+      custoBase,
+      custoMinimo: custoBase * 0.9,
+      custoMaximo: custoBase * 1.3,
+    },
+  };
+};
+
 export default function InvestimentosPage() {
   const [activeTab, setActiveTab] = useState<'projetos' | 'calculadora'>('calculadora');
   const [projects, setProjects] = useState<InvestmentProject[]>([]);
@@ -31,9 +221,9 @@ export default function InvestimentosPage() {
 
   // Calculadora State
   const [calcAves, setCalcAves] = useState<number>(100);
-  const [calcFase, setCalcFase] = useState<'postura' | 'corte'>('postura');
-  const [calcSistema, setCalcSistema] = useState<'caipira' | 'intensivo'>('caipira');
-  const [calcPiquete, setCalcPiquete] = useState<'recomendado' | 'minimo' | 'extensivo'>('recomendado');
+  const [calcFase, setCalcFase] = useState<CalcFase>('postura');
+  const [calcSistema, setCalcSistema] = useState<CalcSistema>('caipira');
+  const [calcPiquete, setCalcPiquete] = useState<CalcPiquete>('recomendado');
   const [calcMaoDeObra, setCalcMaoDeObra] = useState<boolean>(true);
   const [calcLegalizacao, setCalcLegalizacao] = useState<boolean>(true);
   const [calcModulos, setCalcModulos] = useState({
@@ -59,138 +249,87 @@ export default function InvestimentosPage() {
   }, [projects]);
 
   // --- Calculadora Logic ---
-  const calcResults = useMemo(() => {
-    const densidade = calcSistema === 'caipira' 
-      ? (calcFase === 'postura' ? 6 : 10) 
-      : (calcFase === 'postura' ? 10 : 14);
-    
-    const areaM2 = Math.ceil(calcAves / densidade);
-    
-    // Ideal dimensions
-    const largura = areaM2 <= 50 ? 5 : areaM2 <= 100 ? 8 : 10; // Max 10-12m for cross-ventilation
-    const comprimento = Math.ceil(areaM2 / largura);
-    
-    // Piquete rules based on document
-    let fatorPiquete = 0;
-    if (calcSistema === 'caipira') {
-      fatorPiquete = calcPiquete === 'minimo' ? 0.5 : calcPiquete === 'recomendado' ? 2 : 10;
-    }
-    const areaPiquete = calcAves * fatorPiquete;
-    const proporcao_area = areaM2 / 14.28;
-    const f = calcAves / 100;
-    
-    // Simulate granular cost to be highly accurate based on user toggles
-    let totalExato = 0;
-    const add = (qtd: number, preco: number) => { totalExato += (qtd * preco); };
+  const calcResults = useMemo(
+    () =>
+      buildOfficialEstimate({
+        aves: calcAves,
+        fase: calcFase,
+        sistema: calcSistema,
+        piquete: calcPiquete,
+        incluirMaoDeObra: calcMaoDeObra,
+        incluirLegalizacao: calcLegalizacao,
+        modulos: calcModulos,
+      }).metrics,
+    [calcAves, calcFase, calcSistema, calcPiquete, calcMaoDeObra, calcLegalizacao, calcModulos]
+  );
 
-    if (calcModulos.infraestrutura) {
-      // Galpão
-      add(Math.ceil(4 * proporcao_area), 265); add(Math.ceil(2 * proporcao_area), 290);
-      add(Math.ceil(4 * proporcao_area), 100); add(Math.ceil(10 * proporcao_area), 57.5);
-      add(Math.ceil(20 * proporcao_area), 7.5); add(Math.ceil(10 * proporcao_area), 77.5);
-      add(Math.ceil(10 * proporcao_area), 57.5); add(Math.ceil(2 * proporcao_area), 45);
-      add(Math.ceil(1 * proporcao_area), 40); add(Math.ceil(1 * proporcao_area), 275);
-      
-      // Alvenaria
-      add(Math.ceil(104 * proporcao_area), 4.25); add(Math.ceil(8 * proporcao_area), 37.5);
-      add(Math.ceil(1 * proporcao_area), 140); add(Math.ceil(2 * proporcao_area), 140);
-      add(Math.ceil(6 * proporcao_area), 22.5); add(Math.ceil(6 * proporcao_area), 17.5);
-      add(Math.ceil(1 * proporcao_area), 375);
-      
-      // Elétrica e Hidráulica
-      add(Math.ceil(50 * proporcao_area), 4.5); add(Math.ceil(2 * proporcao_area), 25);
-      add(Math.ceil(2 * proporcao_area), 15); add(Math.ceil(2 * proporcao_area), 30);
-      add(Math.ceil(1 * proporcao_area), 15); add(Math.ceil(1 * proporcao_area), 100);
-      add(Math.ceil(20 * proporcao_area), 11.5); add(Math.ceil(1 * proporcao_area), 50);
-      add(Math.ceil(calcAves / 200) || 1, 350); add(Math.ceil(2 * proporcao_area), 30);
-      add(Math.ceil(calcAves / 200) || 1, 30); add(Math.ceil(calcAves / 200) || 1, 140);
-      
-      // Cercamento Galpão e Piquetes
-      add(Math.ceil(16 * proporcao_area), 14); add(1, 150); add(Math.ceil(1 * proporcao_area), 275);
-      if (calcSistema === 'caipira') {
-        const fatorCercaPiquete = calcPiquete === 'extensivo' ? f * 1.5 : f;
-        add(Math.ceil(35 * fatorCercaPiquete), 22.5); add(Math.ceil(120 * fatorCercaPiquete), 11.5);
-        add(Math.ceil(1 * fatorCercaPiquete), 145); add(Math.ceil(2 * (fatorCercaPiquete < 1 ? 1 : fatorCercaPiquete)), 225);
-      }
-    }
+  const estimateSummary = useMemo(() => {
+    const blocos: string[] = [];
 
-    if (calcMaoDeObra && calcModulos.infraestrutura) {
-      add(Math.ceil(1 * proporcao_area), 1750);
-      add(Math.ceil(1 * proporcao_area), 550);
-      add(Math.ceil(1 * proporcao_area), 475);
-    }
+    if (calcModulos.infraestrutura) blocos.push('infraestrutura');
+    if (calcModulos.equipamentos) blocos.push('equipamentos');
+    if (calcModulos.alimentacao_sanidade) blocos.push('alimentação e sanidade');
+    if (calcModulos.aves) blocos.push('lote de aves');
+    if (calcMaoDeObra && (calcModulos.infraestrutura || calcModulos.alimentacao_sanidade)) blocos.push('mão de obra');
+    if (calcLegalizacao) blocos.push('legalização');
 
-    // Equipment formulas
-    const comedouros = Math.ceil(calcAves / 35);
-    const bebedouros = Math.ceil(calcAves / 50);
-    const ninhos = calcFase === 'postura' ? Math.ceil(calcAves / 7) : 0;
+    const base = blocos.length > 0 ? blocos.join(', ') : 'nenhum módulo selecionado';
+    const piqueteResumo =
+      calcSistema === 'caipira'
+        ? ` Piquete configurado em ${calcPiquete}.`
+        : ' Sistema intensivo sem piquete.';
 
-    if (calcModulos.equipamentos) {
-      add(Math.ceil(1 * f), 115); add(1, 105);
-      add(bebedouros, 105); add(comedouros, 95);
-      add(Math.ceil(1 * f), 225); add(ninhos, 50);
-      
-      // Poleiros apenas para aves de postura (Corte não usa poleiro)
-      if (calcFase === 'postura') {
-        add(Math.ceil(calcAves * 0.15), 17.5);
-      }
-      
-      add(1, 200); add(1, 175); add(1, 455);
-    }
+    return `Faixa calculada com base nas opções selecionadas: ${base}.${piqueteResumo}`;
+  }, [calcLegalizacao, calcMaoDeObra, calcModulos, calcPiquete, calcSistema]);
 
-    if (calcModulos.alimentacao_sanidade) {
-      // Inteligência de Consumo: Postura ~8kg até iniciar a postura. Corte ~4.5kg até o abate.
-      const kgRacaoPorAve = calcFase === 'postura' ? 8 : 4.5;
-      const precoSacoRacao = calcFase === 'postura' ? 170 : 185; // Ração de corte tem mais proteína (mais cara)
-      
-      add(Math.ceil((calcAves * kgRacaoPorAve) / 50), precoSacoRacao); // Ração inicial
-      add(Math.ceil(1 * f), 350); // Vacinas
-      add(Math.ceil(1 * f), 235); // Vitaminas
-      add(Math.ceil(1 * f), 185); // Limpeza
-      add(Math.ceil(1 * (f < 1 ? 1 : f)), 170); // EPIs
-      if (calcMaoDeObra) add(1, 550); // Vet
-    }
-
-    if (calcModulos.aves) {
-      // Inteligência de Genética: Pintainha de postura (~R$6.50), Pintinho de corte (~R$3.50)
-      const precoAve = calcFase === 'postura' ? 6.5 : 3.5;
-      add(Math.ceil(calcAves * 1.05), precoAve); // 5% de reserva técnica
-    }
-
-    if (calcLegalizacao) {
-      add(Math.ceil(1 * f), 260); add(1, 525); add(1, 1750);
-    }
-
-    // A faixa baseada na soma exata configurada (Mínimo -10%, Máximo +30% da referência de mercado local)
-    const custoMinimo = totalExato * 0.9;
-    const custoMaximo = totalExato * 1.3;
-
-    return {
-      areaM2,
-      largura,
-      comprimento,
-      areaPiquete,
-      comedouros,
-      bebedouros,
-      ninhos,
-      custoMinimo,
-      custoMaximo
+  const createProjectFromDrafts = (nome: string, drafts: Partial<InvestmentItem>[], isCustomized = false) => {
+    const newProject: InvestmentProject = {
+      id: crypto.randomUUID(),
+      nome,
+      status: 'planejamento',
+      dataInicio: new Date().toISOString(),
+      isCustomized,
+      items: drafts.map((item) => ({
+        id: crypto.randomUUID(),
+        projectId: 'pending',
+        categoria: item.categoria!,
+        descricao: item.descricao!,
+        quantidade: item.quantidade || 1,
+        precoUnitario: item.precoUnitario || 0,
+      })),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
-  }, [calcAves, calcFase, calcSistema, calcPiquete, calcMaoDeObra, calcLegalizacao, calcModulos]);
+
+    newProject.items.forEach((item) => {
+      item.projectId = newProject.id;
+    });
+
+    setProjects((prev) => [newProject, ...prev]);
+    setViewingProjectId(newProject.id);
+  };
+
+  const handleCreateProjectFromCurrentEstimate = () => {
+    const officialEstimate = buildOfficialEstimate({
+      aves: calcAves,
+      fase: calcFase,
+      sistema: calcSistema,
+      piquete: calcPiquete,
+      incluirMaoDeObra: calcMaoDeObra,
+      incluirLegalizacao: calcLegalizacao,
+      modulos: calcModulos,
+    });
+
+    createProjectFromDrafts(
+      `Projeto Calculado ${calcFase === 'postura' ? 'Poedeiras' : 'Corte'} (${calcAves} aves)`,
+      officialEstimate.items,
+      false
+    );
+  };
 
   // --- Templates Dinâmicos Baseados no Conhecimento ---
-  const handleGenerateTemplate = (templateId: string, aves: number, fase: 'postura' | 'corte', sistema: 'caipira' | 'intensivo') => {
-    // Lógica da base de conhecimento
-    const densidade = sistema === 'caipira' 
-      ? (fase === 'postura' ? 6 : 10) 
-      : (fase === 'postura' ? 10 : 14);
-    
-    const areaM2 = Math.ceil(aves / densidade);
-    const largura = areaM2 <= 50 ? 5 : areaM2 <= 100 ? 8 : 10;
-    const comprimento = Math.ceil(areaM2 / largura);
-    const perimetro = (largura + comprimento) * 2;
-    
-    // Variáveis de inteligência zootécnica
+  const handleGenerateTemplate = (templateId: string, aves: number, fase: CalcFase, sistema: CalcSistema) => {
+    const { largura, comprimento } = getStructureDimensions(aves, fase, sistema);
     const kgRacaoPorAve = fase === 'postura' ? 8 : 4.5;
     const precoSacoRacao = fase === 'postura' ? 170 : 185;
     const precoAve = fase === 'postura' ? 6.5 : 3.5;
@@ -198,108 +337,22 @@ export default function InvestimentosPage() {
     const items: Partial<InvestmentItem>[] = [];
 
     if (templateId === 'galpao-completo') {
-      const f = aves / 100;
-      
-      // Fórmulas baseadas no documento de cálculo automático:
-      const comedouros = Math.ceil(aves / 35);
-      const bebedouros = Math.ceil(aves / 50);
-      const ninhos = fase === 'postura' ? Math.ceil(aves / 7) : 0;
-      const poleiros_m = fase === 'postura' ? aves * 0.15 : 0;
-      const racao_sacos = Math.ceil((aves * kgRacaoPorAve) / 50); 
-      
-      // Fator de proporção para infraestrutura
-      const area_galpao_m2 = aves / 7;
-      const proporcao_area = area_galpao_m2 / 14.28; // 14.28 é a área base para 100 aves
-      
-      // Itens fixos que não escalam linearmente
-      const fixo = 1;
+      const officialEstimate = buildOfficialEstimate({
+        aves,
+        fase,
+        sistema,
+        piquete: sistema === 'caipira' ? 'recomendado' : 'minimo',
+        incluirMaoDeObra: true,
+        incluirLegalizacao: true,
+        modulos: {
+          infraestrutura: true,
+          equipamentos: true,
+          alimentacao_sanidade: true,
+          aves: true,
+        },
+      });
 
-      items.push(
-        // 2.1 Estrutura do Galpão (escala por área)
-        { categoria: 'infraestrutura', descricao: 'Pilares de eucalipto tratado (5,5 m, bitola 18)', precoUnitario: 265, quantidade: Math.ceil(4 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Pilares centrais de eucalipto tratado (6 m, bitola 18)', precoUnitario: 290, quantidade: Math.ceil(2 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Travessas de eucalipto tratado (6 m, bitola 10-12)', precoUnitario: 100, quantidade: Math.ceil(4 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Caibros de eucalipto tratado (5 m, bitola 8-10)', precoUnitario: 57.5, quantidade: Math.ceil(10 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Ripas de madeira para telhado (metros)', precoUnitario: 7.5, quantidade: Math.ceil(20 * proporcao_area) },
-        { categoria: 'mao_de_obra', descricao: 'Mão de obra básica da estrutura', precoUnitario: 1750, quantidade: Math.ceil(1 * proporcao_area) },
-        
-        // 2.2 Cobertura
-        { categoria: 'infraestrutura', descricao: 'Telhas de fibrocimento (2,44 m, 6 mm)', precoUnitario: 77.5, quantidade: Math.ceil(10 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Telhas de fibrocimento (1,53 m, 6 mm)', precoUnitario: 57.5, quantidade: Math.ceil(10 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Cumeeiras de fibrocimento', precoUnitario: 45, quantidade: Math.ceil(2 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Parafusos para telha com vedação (pct)', precoUnitario: 40, quantidade: Math.ceil(1 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Manta térmica ou pintura refletiva simples', precoUnitario: 275, quantidade: Math.ceil(1 * proporcao_area) },
-
-        // 2.3 Alvenaria, Piso e Cama Aviária
-        { categoria: 'infraestrutura', descricao: 'Blocos de concreto (14 x 19 x 39 cm)', precoUnitario: 4.25, quantidade: Math.ceil(104 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Cimento (saco 50 kg)', precoUnitario: 37.5, quantidade: Math.ceil(8 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Areia (m³)', precoUnitario: 140, quantidade: Math.ceil(1 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Brita (m³)', precoUnitario: 140, quantidade: Math.ceil(2 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Calha de PVC para água da chuva (m)', precoUnitario: 22.5, quantidade: Math.ceil(6 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Rufos e acabamentos (m)', precoUnitario: 17.5, quantidade: Math.ceil(6 * proporcao_area) },
-        { categoria: 'outros', descricao: 'Cama aviária inicial (maravalha/casca de arroz)', precoUnitario: 375, quantidade: Math.ceil(1 * proporcao_area) },
-
-        // 2.4 Instalações Elétricas
-        { categoria: 'infraestrutura', descricao: 'Fiação cabos 2,5 mm e 1,5 mm (m)', precoUnitario: 4.5, quantidade: Math.ceil(50 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Disjuntores', precoUnitario: 25, quantidade: Math.ceil(2 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Tomadas simples', precoUnitario: 15, quantidade: Math.ceil(2 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Lâmpadas LED para iluminação geral', precoUnitario: 30, quantidade: Math.ceil(2 * proporcao_area) },
-        { categoria: 'equipamentos', descricao: 'Lâmpada/campânula de aquecimento', precoUnitario: 115, quantidade: Math.ceil(1 * f) },
-        { categoria: 'equipamentos', descricao: 'Temporizador para programa de luz', precoUnitario: 105, quantidade: fixo }, // fixo
-        { categoria: 'infraestrutura', descricao: 'Interruptores', precoUnitario: 15, quantidade: Math.ceil(1 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Eletrodutos e acessórios (kit)', precoUnitario: 100, quantidade: Math.ceil(1 * proporcao_area) },
-        { categoria: 'mao_de_obra', descricao: 'Serviço de eletricista', precoUnitario: 550, quantidade: Math.ceil(1 * proporcao_area) },
-
-        // 2.5 Instalações Hidráulicas
-        { categoria: 'infraestrutura', descricao: 'Tubulação PVC 25 mm (m)', precoUnitario: 11.5, quantidade: Math.ceil(20 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Conexões PVC (kit)', precoUnitario: 50, quantidade: Math.ceil(1 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Caixa d’água (500 L)', precoUnitario: 350, quantidade: Math.ceil(aves / 200) || 1 }, // por faixa
-        { categoria: 'infraestrutura', descricao: 'Registros de esfera', precoUnitario: 30, quantidade: Math.ceil(2 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Boia para caixa d’água', precoUnitario: 30, quantidade: Math.ceil(aves / 200) || 1 },
-        { categoria: 'infraestrutura', descricao: 'Filtro simples de entrada', precoUnitario: 140, quantidade: Math.ceil(aves / 200) || 1 },
-        { categoria: 'mao_de_obra', descricao: 'Serviço hidráulico', precoUnitario: 475, quantidade: Math.ceil(1 * proporcao_area) },
-
-        // 2.6 Cercamento do Galpão e 2.7 Piquetes
-        { categoria: 'infraestrutura', descricao: 'Tela galvanizada fio 14 (1,5m altura) (m)', precoUnitario: 14, quantidade: Math.ceil(16 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Portão de tela simples para galpão', precoUnitario: 150, quantidade: fixo }, // fixo
-        { categoria: 'infraestrutura', descricao: 'Cortinas/lonas laterais contra chuva/vento', precoUnitario: 275, quantidade: Math.ceil(1 * proporcao_area) },
-        { categoria: 'infraestrutura', descricao: 'Postes de eucalipto para piquete', precoUnitario: 22.5, quantidade: Math.ceil(35 * f) },
-        { categoria: 'infraestrutura', descricao: 'Tela para piquete (1,0m altura) (m)', precoUnitario: 11.5, quantidade: Math.ceil(120 * f) },
-        { categoria: 'infraestrutura', descricao: 'Arame e grampos para cerca (kit)', precoUnitario: 145, quantidade: Math.ceil(1 * f) },
-        { categoria: 'infraestrutura', descricao: 'Portões para piquetes', precoUnitario: 225, quantidade: Math.ceil(2 * (f < 1 ? 1 : f)) }, // mínimo 2
-
-        // 3 Equipamentos para as Aves
-        { categoria: 'equipamentos', descricao: 'Bebedouros pendulares automáticos', precoUnitario: 105, quantidade: bebedouros },
-        { categoria: 'equipamentos', descricao: 'Comedouros tubulares de 20 kg', precoUnitario: 95, quantidade: comedouros },
-        { categoria: 'equipamentos', descricao: 'Círculo de proteção/pinteiro', precoUnitario: 225, quantidade: Math.ceil(1 * f) },
-        ...(ninhos > 0 ? [{ categoria: 'equipamentos' as InvestmentCategory, descricao: 'Ninhos individuais', precoUnitario: 50, quantidade: ninhos }] : []),
-        ...(poleiros_m > 0 ? [{ categoria: 'equipamentos' as InvestmentCategory, descricao: 'Poleiros de madeira (m lineares)', precoUnitario: 17.5, quantidade: Math.ceil(poleiros_m) }] : []),
-        { categoria: 'equipamentos', descricao: 'Ovoscópio simples', precoUnitario: 200, quantidade: fixo },
-        { categoria: 'equipamentos', descricao: 'Balança digital para ovos e ração', precoUnitario: 175, quantidade: fixo },
-        { categoria: 'equipamentos', descricao: 'Ferramentas (pá, vassoura, carrinho, etc)', precoUnitario: 455, quantidade: fixo },
-
-        // 4 Alimentação
-        { categoria: 'outros', descricao: `Ração ${fase === 'postura' ? 'até a postura' : 'até o abate'} (sacos 50kg)`, precoUnitario: precoSacoRacao, quantidade: racao_sacos },
-
-        // 5 Medicamentos
-        { categoria: 'outros', descricao: 'Vacinas (Newcastle, Bronquite, Bouba, etc)', precoUnitario: 350, quantidade: Math.ceil(1 * f) },
-        { categoria: 'outros', descricao: 'Vitaminas, vermífugos e antissépticos', precoUnitario: 235, quantidade: Math.ceil(1 * f) },
-        { categoria: 'mao_de_obra', descricao: 'Consultoria veterinária inicial', precoUnitario: 550, quantidade: fixo }, // fixo
-
-        // 6 Limpeza
-        { categoria: 'outros', descricao: 'Produtos de Limpeza (Desinfetante, Cal, Detergente)', precoUnitario: 185, quantidade: Math.ceil(1 * f) },
-        { categoria: 'outros', descricao: 'EPIs (Botas, Luvas, Máscaras)', precoUnitario: 170, quantidade: Math.ceil(1 * (f < 1 ? 1 : f)) }, // mínimo 1 kit
-
-        // 7 Comercialização
-        { categoria: 'licencas', descricao: 'Embalagens e Bandejas (Lotes)', precoUnitario: 260, quantidade: Math.ceil(1 * f) },
-        { categoria: 'licencas', descricao: 'Rótulos, carimbos e etiquetas', precoUnitario: 525, quantidade: fixo }, // fixo
-        { categoria: 'licencas', descricao: 'Taxas, registros e adequações sanitárias', precoUnitario: 1750, quantidade: fixo }, // fixo
-
-        // 8 Aves
-        { categoria: 'outros', descricao: `Pintainhos de 1 dia (${fase === 'postura' ? 'Postura' : 'Corte'})`, precoUnitario: precoAve, quantidade: Math.ceil(aves * 1.05) } // 5% de margem recomendada
-      );
-      
-      return { nome: `Projeto Completo ${fase === 'postura' ? 'Poedeiras' : 'Corte'} (${aves} aves)`, items };
+      return { nome: `Projeto Completo ${fase === 'postura' ? 'Poedeiras' : 'Corte'} (${aves} aves)`, items: officialEstimate.items };
     }
 
     if (templateId === 'baixo-custo') {
@@ -359,28 +412,7 @@ export default function InvestimentosPage() {
     if (!selectedTemplateId) return;
 
     const { nome, items } = handleGenerateTemplate(selectedTemplateId, paramAves, paramFase, paramSistema);
-    
-    const newProject: InvestmentProject = {
-      id: crypto.randomUUID(),
-      nome,
-      status: 'planejamento',
-      dataInicio: new Date().toISOString(),
-      isCustomized: false,
-      items: items.map(item => ({
-        id: crypto.randomUUID(),
-        projectId: 'pending',
-        categoria: item.categoria!,
-        descricao: item.descricao!,
-        quantidade: item.quantidade || 1,
-        precoUnitario: item.precoUnitario || 0,
-      })),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    newProject.items.forEach(i => i.projectId = newProject.id);
-    
-    setProjects(prev => [newProject, ...prev]);
-    setViewingProjectId(newProject.id);
+    createProjectFromDrafts(nome, items, false);
     setShowTemplateModal(false);
   };
 
@@ -388,8 +420,8 @@ export default function InvestimentosPage() {
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [paramAves, setParamAves] = useState(500);
-  const [paramFase, setParamFase] = useState<'postura' | 'corte'>('postura');
-  const [paramSistema, setParamSistema] = useState<'caipira' | 'intensivo'>('caipira');
+  const [paramFase, setParamFase] = useState<CalcFase>('postura');
+  const [paramSistema, setParamSistema] = useState<CalcSistema>('caipira');
 
   const currentProjectView = useMemo(() => {
     return projects.find(p => p.id === viewingProjectId);
@@ -662,13 +694,16 @@ export default function InvestimentosPage() {
                   <div className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-2">Estrutura Principal</div>
                   <div className="grid grid-cols-2 gap-3 min-w-0">
                     <div className="rounded-xl bg-white/5 p-4 border border-white/10 min-w-0">
-                      <div className="text-2xl font-black text-white truncate">{calcResults.areaM2} <span className="text-sm font-medium text-slate-400">m²</span></div>
+                      <div className="text-2xl font-black text-white truncate">{calcResults.areaConstruidaM2} <span className="text-sm font-medium text-slate-400">m²</span></div>
                       <div className="text-xs text-slate-400 mt-1 truncate">Área do Galpão</div>
                     </div>
                     <div className="rounded-xl bg-white/5 p-4 border border-white/10 min-w-0">
                       <div className="text-2xl font-black text-white truncate">{calcResults.largura}x{calcResults.comprimento} <span className="text-sm font-medium text-slate-400">m</span></div>
                       <div className="text-xs text-slate-400 mt-1 truncate">Medidas Ideais</div>
                     </div>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-400">
+                    Área útil mínima calculada: {calcResults.areaM2} m²
                   </div>
                 </div>
 
@@ -708,7 +743,7 @@ export default function InvestimentosPage() {
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calcResults.custoMaximo)}
                     </div>
                     <div className="text-xs text-slate-300 mt-2">
-                      Estimativa completa baseada no Guia Oficial para {calcAves} aves, considerando estrutura, aves, equipamentos, alimentação inicial e legalização.
+                      {estimateSummary}
                     </div>
                   </div>
                   
@@ -728,13 +763,7 @@ export default function InvestimentosPage() {
             <div className="relative z-10 mt-6 pt-6 border-t border-white/10 mt-auto">
               <button 
                 className="w-full rounded-xl bg-white text-[#0f1c2b] py-3 px-4 font-black flex items-center justify-center gap-2 hover:bg-brand-primary hover:text-white transition-colors shadow-xl"
-                onClick={() => {
-                  setSelectedTemplateId('galpao-completo');
-                  setParamAves(calcAves);
-                  setParamFase(calcFase);
-                  setParamSistema(calcSistema);
-                  setShowTemplateModal(true);
-                }}
+                onClick={handleCreateProjectFromCurrentEstimate}
               >
                 <Hammer className="h-5 w-5" />
                 Criar Orçamento deste Projeto
@@ -904,13 +933,13 @@ export default function InvestimentosPage() {
                     <div className="flex flex-col">
                       <div className="text-2xl">
                         <span className="text-sm font-medium text-slate-400 mr-1">Min:</span>
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                           currentProjectView.items.reduce((sum, i) => sum + (i.precoUnitario * i.quantidade), 0) * 0.9
                         )}
                       </div>
                       <div className="text-2xl border-t border-white/10 pt-2 mt-2">
                         <span className="text-sm font-medium text-slate-400 mr-1">Max:</span>
-                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                           currentProjectView.items.reduce((sum, i) => sum + (i.precoUnitario * i.quantidade), 0) * 1.3
                         )}
                       </div>
@@ -924,12 +953,13 @@ export default function InvestimentosPage() {
               
               <div className="md:col-span-3 grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Calculate Categories */}
-                {['infraestrutura', 'equipamentos', 'mao_de_obra', 'outros'].map(cat => {
+                {['infraestrutura', 'equipamentos', 'mao_de_obra', 'licencas', 'outros'].map(cat => {
                   const catTotal = currentProjectView.items.filter(i => i.categoria === cat).reduce((s, i) => s + (i.precoUnitario * i.quantidade), 0);
                   const colors: any = {
                     infraestrutura: 'text-orange-600 bg-orange-50 border-orange-100',
                     equipamentos: 'text-blue-600 bg-blue-50 border-blue-100',
                     mao_de_obra: 'text-emerald-600 bg-emerald-50 border-emerald-100',
+                    licencas: 'text-violet-600 bg-violet-50 border-violet-100',
                     outros: 'text-gray-600 bg-gray-50 border-gray-100'
                   };
                   return (
