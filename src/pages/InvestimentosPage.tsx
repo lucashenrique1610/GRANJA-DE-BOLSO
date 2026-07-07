@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Plus, 
   Trash2, 
@@ -11,9 +11,19 @@ import {
   DollarSign, 
   Hammer, 
   FileText,
-  AlertCircle
+  AlertCircle,
+  Cloud,
+  CloudOff,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 import { InvestmentCategory, InvestmentItem, InvestmentProject } from '@/types';
+import {
+  saveInvestmentProject,
+  loadInvestmentProjects,
+  deleteInvestmentProject,
+  isSupabaseConfigured,
+} from '@/lib/supabase';
 
 type CalcFase = 'postura' | 'corte';
 type CalcSistema = 'caipira' | 'intensivo';
@@ -209,6 +219,12 @@ export default function InvestimentosPage() {
   const [activeTab, setActiveTab] = useState<'projetos' | 'calculadora'>('calculadora');
   const [projects, setProjects] = useState<InvestmentProject[]>([]);
   const [viewingProjectId, setViewingProjectId] = useState<string | null>(null);
+
+  // Supabase sync state
+  const [savingProjectId, setSavingProjectId] = useState<string | null>(null);
+  const [savedProjectId, setSavedProjectId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isLoadingCloud, setIsLoadingCloud] = useState(false);
   
   // New Project/Item Modals
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
@@ -233,20 +249,81 @@ export default function InvestimentosPage() {
     aves: true
   });
 
+  // Carrega projetos: primeiro do Supabase (se configurado), fallback localStorage
   useEffect(() => {
-    const saved = localStorage.getItem('granja-investments');
-    if (saved) {
-      try {
-        setProjects(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to parse investments', e);
+    const loadFromSupabase = async () => {
+      if (!isSupabaseConfigured) {
+        const saved = localStorage.getItem('granja-investments');
+        if (saved) {
+          try { setProjects(JSON.parse(saved)); } catch { /* ignore */ }
+        }
+        return;
       }
-    }
+      setIsLoadingCloud(true);
+      try {
+        const remoteProjects = await loadInvestmentProjects();
+        if (remoteProjects.length > 0) {
+          setProjects(remoteProjects);
+          localStorage.setItem('granja-investments', JSON.stringify(remoteProjects));
+        } else {
+          // Fallback para localStorage se não há dados na nuvem
+          const saved = localStorage.getItem('granja-investments');
+          if (saved) {
+            try { setProjects(JSON.parse(saved)); } catch { /* ignore */ }
+          }
+        }
+      } catch (err: any) {
+        setLoadError(err?.message ?? 'Erro ao carregar projetos da nuvem.');
+        const saved = localStorage.getItem('granja-investments');
+        if (saved) {
+          try { setProjects(JSON.parse(saved)); } catch { /* ignore */ }
+        }
+      } finally {
+        setIsLoadingCloud(false);
+      }
+    };
+    loadFromSupabase();
   }, []);
 
+  // Persiste sempre no localStorage como backup offline
   useEffect(() => {
     localStorage.setItem('granja-investments', JSON.stringify(projects));
   }, [projects]);
+
+  // Salva um projeto individual no Supabase
+  const handleSaveToCloud = useCallback(async (project: InvestmentProject) => {
+    if (!isSupabaseConfigured) {
+      alert('Supabase não configurado. O projeto está salvo localmente.');
+      return;
+    }
+    setSavingProjectId(project.id);
+    setSavedProjectId(null);
+    try {
+      await saveInvestmentProject(project);
+      setSavedProjectId(project.id);
+      setTimeout(() => setSavedProjectId(null), 3000);
+    } catch (err: any) {
+      alert(`Erro ao salvar: ${err?.message ?? 'Erro desconhecido'}`);
+    } finally {
+      setSavingProjectId(null);
+    }
+  }, []);
+
+  // Deleta projeto do Supabase e do estado local
+  const handleDeleteProject = useCallback(async (projectId: string) => {
+    if (!confirm('Excluir este projeto inteiro? Esta ação não pode ser desfeita.')) return;
+    // Remove localmente imediatamente
+    setProjects(prev => prev.filter(p => p.id !== projectId));
+    setViewingProjectId(null);
+    // Tenta remover da nuvem também
+    if (isSupabaseConfigured) {
+      try {
+        await deleteInvestmentProject(projectId);
+      } catch (err: any) {
+        console.warn('Erro ao deletar projeto da nuvem:', err?.message);
+      }
+    }
+  }, []);
 
   // --- Calculadora Logic ---
   const calcResults = useMemo(
@@ -775,6 +852,20 @@ export default function InvestimentosPage() {
 
       {activeTab === 'projetos' && !viewingProjectId && (
         <section className="space-y-6">
+          {/* Banner de carregamento da nuvem */}
+          {isLoadingCloud && (
+            <div className="flex items-center gap-3 rounded-xl bg-brand-primary/10 border border-brand-primary/20 px-4 py-3 text-sm font-medium text-brand-primary">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Carregando projetos da nuvem...
+            </div>
+          )}
+          {loadError && (
+            <div className="flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm font-medium text-amber-700">
+              <CloudOff className="h-4 w-4" />
+              {loadError} — Exibindo dados salvos localmente.
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Hammer className="h-5 w-5 text-brand-primary" />
@@ -888,17 +979,34 @@ export default function InvestimentosPage() {
             >
               ← Voltar
             </button>
-            <button 
-              className="text-sm font-bold text-red-500 hover:text-red-700 w-fit"
-              onClick={() => {
-                if (confirm('Excluir este projeto inteiro?')) {
-                  setProjects(prev => prev.filter(p => p.id !== currentProjectView.id));
-                  setViewingProjectId(null);
-                }
-              }}
-            >
-              Excluir Projeto
-            </button>
+
+            <div className="flex items-center gap-3">
+              {/* Botão Salvar no Supabase */}
+              <button
+                onClick={() => handleSaveToCloud(currentProjectView)}
+                disabled={savingProjectId === currentProjectView.id}
+                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-all ${
+                  savedProjectId === currentProjectView.id
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-brand-primary text-white hover:bg-brand-hover'
+                } disabled:opacity-60 disabled:cursor-not-allowed`}
+              >
+                {savingProjectId === currentProjectView.id ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Salvando...</>
+                ) : savedProjectId === currentProjectView.id ? (
+                  <><CheckCircle2 className="h-4 w-4" /> Salvo na Nuvem!</>
+                ) : (
+                  <><Cloud className="h-4 w-4" /> Salvar na Nuvem</>
+                )}
+              </button>
+
+              <button 
+                className="text-sm font-bold text-red-500 hover:text-red-700 w-fit"
+                onClick={() => handleDeleteProject(currentProjectView.id)}
+              >
+                Excluir Projeto
+              </button>
+            </div>
           </div>
 
           <div className="app-section-card border-t-4 border-t-brand-primary min-w-0">

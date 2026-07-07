@@ -10,6 +10,7 @@ import {
   GalpaoRecord,
   HealthProfessionalRecord,
   HealthRecord,
+  InvestmentProject,
   MortalityRecord,
   PurchaseRecord,
   SupplierRecord,
@@ -2951,5 +2952,124 @@ export async function restoreMyBackupSnapshot(snapshot: BackupSnapshot) {
 
     const { error } = await sb.from('estoque_racao_formulada').insert(formulatedFeedStockPayload);
     if (error) throw error;
+  }
+}
+
+// =====================================================
+// INVESTIMENTOS
+// =====================================================
+
+/**
+ * Salva (upsert) um projeto de investimento completo no Supabase.
+ * Usa a RPC save_investment_project que faz upsert do projeto
+ * e reinserção atômica de todos os itens.
+ */
+export async function saveInvestmentProject(project: InvestmentProject): Promise<void> {
+  assertBillingAccess();
+  const sb = requireSupabase();
+  const { data: userData, error: userError } = await sb.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error('Usuário não autenticado.');
+
+  const granja = await getMyLatestGranja();
+
+  const payload = {
+    id:            project.id,
+    granjaId:      granja?.id ?? null,
+    nome:          project.nome,
+    status:        project.status,
+    dataInicio:    project.dataInicio,
+    dataConclusao: project.dataConclusao ?? null,
+    isCustomized:  project.isCustomized ?? false,
+    calcParams:    null,
+    items: project.items.map((item) => ({
+      id:           item.id,
+      projectId:    item.projectId,
+      categoria:    item.categoria,
+      descricao:    item.descricao,
+      quantidade:   item.quantidade,
+      precoUnitario: item.precoUnitario,
+    })),
+  };
+
+  const { data, error } = await sb.rpc('save_investment_project', { p_payload: payload });
+  if (error) throw error;
+  if (data && data.success === false) {
+    throw new Error(data.error ?? 'Erro ao salvar projeto.');
+  }
+}
+
+/**
+ * Carrega todos os projetos de investimento do usuário autenticado,
+ * incluindo seus itens completos.
+ */
+export async function loadInvestmentProjects(): Promise<InvestmentProject[]> {
+  assertBillingAccess();
+  const sb = requireSupabase();
+  const { data: userData, error: userError } = await sb.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error('Usuário não autenticado.');
+
+  // Busca projetos
+  const { data: projects, error: projError } = await sb
+    .from('investment_projects')
+    .select('*')
+    .eq('user_id', userData.user.id)
+    .order('created_at', { ascending: false });
+
+  if (projError) throw projError;
+  if (!projects || projects.length === 0) return [];
+
+  const projectIds = projects.map((p: any) => p.id);
+
+  // Busca todos os itens dos projetos em uma única query
+  const { data: items, error: itemsError } = await sb
+    .from('investment_items')
+    .select('*')
+    .in('project_id', projectIds)
+    .eq('user_id', userData.user.id);
+
+  if (itemsError) throw itemsError;
+
+  const itemsByProject: Record<string, any[]> = {};
+  for (const item of items ?? []) {
+    if (!itemsByProject[item.project_id]) itemsByProject[item.project_id] = [];
+    itemsByProject[item.project_id].push(item);
+  }
+
+  return projects.map((p: any): InvestmentProject => ({
+    id:            p.id,
+    nome:          p.nome,
+    status:        p.status,
+    dataInicio:    p.data_inicio,
+    dataConclusao: p.data_conclusao ?? undefined,
+    isCustomized:  Boolean(p.is_customized),
+    createdAt:     p.created_at ?? new Date().toISOString(),
+    updatedAt:     p.updated_at ?? new Date().toISOString(),
+    items: (itemsByProject[p.id] ?? []).map((i: any) => ({
+      id:           i.id,
+      projectId:    i.project_id,
+      categoria:    i.categoria,
+      descricao:    i.descricao,
+      quantidade:   Number(i.quantidade ?? 1),
+      precoUnitario: Number(i.preco_unitario ?? 0),
+    })),
+  }));
+}
+
+/**
+ * Deleta um projeto de investimento (e seus itens via CASCADE) do Supabase.
+ */
+export async function deleteInvestmentProject(projectId: string): Promise<void> {
+  assertBillingAccess();
+  const sb = requireSupabase();
+  const { data: userData, error: userError } = await sb.auth.getUser();
+  if (userError) throw userError;
+  if (!userData.user) throw new Error('Usuário não autenticado.');
+
+  const { data, error } = await sb.rpc('delete_investment_project', { p_project_id: projectId });
+  if (error) throw error;
+  if (data && data.success === false) {
+    throw new Error(data.error ?? 'Erro ao deletar projeto.');
   }
 }
