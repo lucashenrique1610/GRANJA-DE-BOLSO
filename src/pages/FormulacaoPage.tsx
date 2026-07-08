@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { 
   Calculator, 
   Wheat, 
@@ -404,44 +404,31 @@ export default function FormulacaoPage({
 
   return (
     <div className="app-section space-y-6">
-      {/* Header */}
-      <section className="app-section-card">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <div className="app-section-badge">Nutrição</div>
-            <h1 className="app-section-title">Formulação de Ração</h1>
-            <p className="app-section-description">
-              Laboratório virtual para criar rações balanceadas, otimizar custos e integrar com lotes, estoque e manejo.
-            </p>
-          </div>
-        </div>
-        
-        {/* Tabs */}
-        <div className="mt-6 flex flex-wrap gap-2 border-b border-gray-200 pb-2">
-          {[
-            { id: 'criar', label: 'Criar Formulação', icon: Calculator },
-            { id: 'ingredientes', label: 'Ingredientes', icon: Wheat },
-            { id: 'formulacoes', label: 'Formulações Salvas', icon: FileText },
-            { id: 'estoque', label: 'Estoque', icon: Package }
-          ].map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`inline-flex items-center gap-2 rounded-t-2xl px-4 py-2 text-sm font-bold transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-brand-primary text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </section>
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        {[
+          { id: 'criar', label: 'Criar Formulação', icon: Calculator },
+          { id: 'ingredientes', label: 'Ingredientes', icon: Wheat },
+          { id: 'formulacoes', label: 'Formulações Salvas', icon: FileText },
+          { id: 'estoque', label: 'Estoque', icon: Package }
+        ].map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition-colors ${
+                activeTab === tab.id
+                  ? 'bg-brand-primary text-white'
+                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-slate-50'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              {tab.label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Tab Content */}
       {activeTab === 'criar' && (

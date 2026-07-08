@@ -333,44 +333,33 @@ export default function RelatoriosPage({
 
   return (
     <div className="app-section space-y-6">
-      <section className="app-section-card">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="app-section-badge">Gestão</div>
-            <h1 className="app-section-title">Gestão • Relatórios</h1>
-            <p className="app-section-description">
-              Análise detalhada dos dados da granja com filtros e exportação.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={exportToCSV}
-              disabled={isLoading}
-              className="flex items-center gap-2 rounded-full bg-white border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-            >
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              CSV
-            </button>
-            <button
-              onClick={exportToExcel}
-              disabled={isLoading}
-              className="flex items-center gap-2 rounded-full bg-white border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-            >
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              Excel
-            </button>
-            <button
-              onClick={exportToPDF}
-              disabled={isLoading}
-              className="flex items-center gap-2 rounded-full bg-brand-primary px-4 py-2 text-sm font-bold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
-            >
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              PDF
-            </button>
-          </div>
-        </div>
-      </section>
+      {/* Export buttons */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        <button
+          onClick={exportToCSV}
+          disabled={isLoading}
+          className="flex items-center gap-2 rounded-full bg-white border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          CSV
+        </button>
+        <button
+          onClick={exportToExcel}
+          disabled={isLoading}
+          className="flex items-center gap-2 rounded-full bg-white border border-gray-300 px-4 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          Excel
+        </button>
+        <button
+          onClick={exportToPDF}
+          disabled={isLoading}
+          className="flex items-center gap-2 rounded-full bg-brand-primary px-4 py-2 text-sm font-bold text-white hover:bg-brand-hover disabled:opacity-50 transition-colors"
+        >
+          {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          PDF
+        </button>
+      </div>
 
       <section className="app-section-card">
         <div className="flex items-center gap-2 mb-4">

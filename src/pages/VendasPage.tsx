@@ -198,52 +198,42 @@ export default function VendasPage({
 
   return (
     <div className="app-section space-y-6">
-      <section className="app-section-card">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <div className="app-section-badge">Operações</div>
-            <h1 className="app-section-title">Operações • Vendas</h1>
-            <p className="app-section-description">
-              Registre vendas, valide estoque e visualize o histórico de transações.
-            </p>
-          </div>
+      {/* Tab Navigation without the card wrapper */}
+      <div className="flex flex-wrap gap-2 mb-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveSection(tab.id)}
+            className={[
+              'rounded-full px-4 py-2 text-sm font-bold transition-colors',
+              activeSection === tab.id
+                ? 'bg-brand-primary text-white'
+                : 'border border-gray-300 bg-white text-gray-700 hover:bg-slate-50',
+            ].join(' ')}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-          <div className="flex flex-wrap gap-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveSection(tab.id)}
-                className={[
-                  'rounded-full px-4 py-2 text-sm font-bold transition-colors',
-                  activeSection === tab.id
-                    ? 'bg-brand-primary text-white'
-                    : 'border border-gray-300 bg-white text-gray-700 hover:bg-slate-50',
-                ].join(' ')}
-              >
-                {tab.label}
-              </button>
-            ))}
+      {/* Error/Sync message still visible */}
+      {(errorMessage || isSyncing) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="text-sm font-medium text-amber-800">
+            {errorMessage || 'Sincronizando dados de vendas com o Supabase...'}
           </div>
+          {errorMessage && onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-full border border-amber-300 px-4 py-2 text-xs font-bold text-amber-700 transition-colors hover:bg-white"
+            >
+              Tentar novamente
+            </button>
+          )}
         </div>
-
-        {(errorMessage || isSyncing) && (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <div className="text-sm font-medium text-amber-800">
-              {errorMessage || 'Sincronizando dados de vendas com o Supabase...'}
-            </div>
-            {errorMessage && onRetry && (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="rounded-full border border-amber-300 px-4 py-2 text-xs font-bold text-amber-700 transition-colors hover:bg-white"
-              >
-                Tentar novamente
-              </button>
-            )}
-          </div>
-        )}
-      </section>
+      )}
 
       {activeSection === 'form' && (
         <section className="app-section-card">

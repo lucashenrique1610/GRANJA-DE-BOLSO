@@ -1893,20 +1893,20 @@ export default function AppShell({
         onRequestCloseMobile={handleCloseMobileSidebar}
       />
 
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className={`flex-1 flex flex-col min-w-0 overflow-hidden transition-all duration-300 ${isSidebarCollapsed ? 'md:ml-[calc(4.5rem+1rem)]' : 'md:ml-[calc(16rem+1rem)]'}`}>
         <header
-          className={[
-            'h-16 sticky top-0 z-30 flex items-center justify-between px-6 border-b transition-all duration-250 shadow-sm',
-            isDarkMode 
-              ? 'bg-gradient-to-r from-slate-900 to-slate-800 border-slate-700' 
-              : 'bg-gradient-to-r from-white to-slate-50 border-slate-200',
-          ].join(' ')}
+          className="h-16 sticky top-0 z-30 flex items-center justify-between px-6 transition-all duration-250 shadow-xl rounded-2xl md:mx-4 md:mt-4"
+          style={{
+            background: isDarkMode 
+              ? 'linear-gradient(to right, #0f172a, #1e293b)' 
+              : 'linear-gradient(to right, var(--brand-bg) 0%, var(--brand-main) 100%)',
+          }}
           role="banner"
         >
           <div className="flex items-center gap-4 min-w-0">
             <div className="min-w-0">
-              <div className={`text-base font-bold truncate ${isDarkMode ? 'text-blue-400' : 'text-brand-primary'}`}>{activeTitle}</div>
-              <div className={`flex items-center gap-2 text-xs font-medium truncate ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+              <div className={`text-base font-extrabold truncate ${isDarkMode ? 'text-slate-100' : 'text-slate-800'}`}>{activeTitle}</div>
+              <div className={`flex items-center gap-2 text-xs font-semibold truncate ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}>
                 <span className="truncate">{appState.personal.email || 'Conta'}</span>
                 {isAdmin && (
                   <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.12em] text-violet-700">
@@ -1965,7 +1965,7 @@ export default function AppShell({
                 'px-4 py-2.5 rounded-2xl font-bold text-sm transition-all duration-250 active:scale-95 cursor-pointer flex items-center gap-2 shadow-sm',
                 isDarkMode
                   ? 'bg-slate-800 hover:bg-red-950/50 text-red-400 hover:text-red-300'
-                  : 'bg-slate-100 hover:bg-red-50 text-red-600 hover:text-red-700',
+                  : 'bg-white hover:bg-red-50 text-red-600 hover:text-red-700 border border-slate-200',
               ].join(' ')}
               aria-label="Sair da conta"
             >
@@ -1976,7 +1976,7 @@ export default function AppShell({
         </header>
 
         <main 
-          className={`flex-1 min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0 ${isDarkMode ? 'bg-[#0b1220]' : ''}`} 
+          className={`flex-1 min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-0 md:px-4 md:pt-4 ${isDarkMode ? 'bg-[#0b1220]' : ''}`} 
           role="main"
         >
           {isAccessResolved && !isAdmin && !hasModuleAccess && (

@@ -120,34 +120,24 @@ export default function FinanceiroPage({ settings, vendas, compras, animais }: F
 
   return (
     <div className="app-section space-y-6">
-      <section className="app-section-card">
-        <div>
-          <div className="app-section-badge">Gestão</div>
-          <h1 className="app-section-title">Financeiro</h1>
-          <p className="app-section-description">
-            Dashboard financeiro com análise de receitas, despesas e lucratividade.
-          </p>
-        </div>
-
-        {/* Filtro por Lote */}
-        <div className="mt-6">
-          <label className="text-xs font-bold uppercase tracking-[0.08em] text-gray-500 block mb-2">
-            Filtrar por Lote
-          </label>
-          <select
-            value={selectedLoteId}
-            onChange={(e) => setSelectedLoteId(e.target.value)}
-            className="w-full max-w-md rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
-          >
-            <option value="">Todos os lotes</option>
-            {animais.map(animal => (
-              <option key={animal.id} value={animal.id}>
-                {getAnimalLabel(animal)}
-              </option>
-            ))}
-          </select>
-        </div>
-      </section>
+      {/* Filtro por Lote */}
+      <div>
+        <label className="text-xs font-bold uppercase tracking-[0.08em] text-gray-500 block mb-2">
+          Filtrar por Lote
+        </label>
+        <select
+          value={selectedLoteId}
+          onChange={(e) => setSelectedLoteId(e.target.value)}
+          className="w-full max-w-md rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-[#0f1c2b] outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+        >
+          <option value="">Todos os lotes</option>
+          {animais.map(animal => (
+            <option key={animal.id} value={animal.id}>
+              {getAnimalLabel(animal)}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {/* Cards Principais */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

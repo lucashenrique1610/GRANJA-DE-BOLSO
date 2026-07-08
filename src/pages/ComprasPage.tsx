@@ -409,62 +409,50 @@ export default function ComprasPage({
 
   return (
     <div className="app-section space-y-6">
-      <section className="app-section-card">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <div className="app-section-badge">Gestão</div>
-            <h1 className="app-section-title">Gestão • Compras</h1>
-            <p className="app-section-description">
-              Controle aquisições da granja com integração aos lotes de aves, fornecedores, filtros operacionais e relatórios de gastos.
-            </p>
-          </div>
+      <label className="relative w-full xl:max-w-sm">
+        <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input
+          type="search"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Buscar por item, nota, fornecedor, lote ou categoria"
+          className="w-full rounded-2xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-sm text-[#0f1c2b] outline-none transition-colors focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
+        />
+      </label>
 
-          <label className="relative w-full xl:max-w-sm">
-            <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="search"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar por item, nota, fornecedor, lote ou categoria"
-              className="w-full rounded-2xl border border-gray-300 bg-white py-3 pl-11 pr-4 text-sm text-[#0f1c2b] outline-none transition-colors focus:border-brand-primary focus:ring-1 focus:ring-brand-primary"
-            />
-          </label>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+          <div className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Gasto filtrado</div>
+          <div className="mt-2 text-2xl font-extrabold text-[#0f1c2b]">{currencyFormatter.format(totals.filteredTotal)}</div>
         </div>
-
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
-            <div className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Gasto filtrado</div>
-            <div className="mt-2 text-2xl font-extrabold text-[#0f1c2b]">{currencyFormatter.format(totals.filteredTotal)}</div>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
-            <div className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Gasto do mês</div>
-            <div className="mt-2 text-2xl font-extrabold text-[#0f1c2b]">{currencyFormatter.format(totals.monthTotal)}</div>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
-            <div className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Compras pendentes</div>
-            <div className="mt-2 text-2xl font-extrabold text-[#0f1c2b]">{totals.pendingCount}</div>
-          </div>
-          <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
-            <div className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Ticket médio</div>
-            <div className="mt-2 text-2xl font-extrabold text-[#0f1c2b]">{currencyFormatter.format(totals.averageTicket)}</div>
-          </div>
+        <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+          <div className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Gasto do mês</div>
+          <div className="mt-2 text-2xl font-extrabold text-[#0f1c2b]">{currencyFormatter.format(totals.monthTotal)}</div>
         </div>
+        <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+          <div className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Compras pendentes</div>
+          <div className="mt-2 text-2xl font-extrabold text-[#0f1c2b]">{totals.pendingCount}</div>
+        </div>
+        <div className="rounded-2xl border border-gray-200 bg-slate-50 p-4">
+          <div className="text-xs font-bold uppercase tracking-[0.14em] text-gray-500">Ticket médio</div>
+          <div className="mt-2 text-2xl font-extrabold text-[#0f1c2b]">{currencyFormatter.format(totals.averageTicket)}</div>
+        </div>
+      </div>
 
-        {(errorMessage || isSyncing) && (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-            <div className="text-sm font-medium text-amber-800">{errorMessage || 'Sincronizando compras com o Supabase...'}</div>
-            {errorMessage && onRetry && (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="rounded-full border border-amber-300 px-4 py-2 text-xs font-bold text-amber-700 transition-colors hover:bg-white"
-              >
-                Tentar novamente
-              </button>
-            )}
-          </div>
-        )}
-      </section>
+      {(errorMessage || isSyncing) && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="text-sm font-medium text-amber-800">{errorMessage || 'Sincronizando compras com o Supabase...'}</div>
+          {errorMessage && onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-full border border-amber-300 px-4 py-2 text-xs font-bold text-amber-700 transition-colors hover:bg-white"
+            >
+              Tentar novamente
+            </button>
+          )}
+        </div>
+      )}
 
       <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <div className="app-section-card">

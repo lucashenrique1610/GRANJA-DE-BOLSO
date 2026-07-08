@@ -431,9 +431,12 @@ function Sidebar({
   }, [allowedRoutes, categories]);
 
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  const [isSecondaryMenuOpen, setIsSecondaryMenuOpen] = useState(false);
 
   const isNavigatingRef = useRef(false);
   const mobileSidebarRef = useRef<HTMLDivElement>(null);
+  const secondaryMenuRef = useRef<HTMLDivElement>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
 
   // Auto-open the group containing the active route
   useEffect(() => {
@@ -458,11 +461,42 @@ function Sidebar({
   useEffect(() => {
     if (isMobileOpen && mobileSidebarRef.current) {
       const first = mobileSidebarRef.current.querySelector<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"]'
       );
       first?.focus();
     }
   }, [isMobileOpen]);
+
+  // Handle click outside to close secondary menu + ESC to close
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // If click is NOT on the menu AND NOT on the button, close the menu
+      if (
+        secondaryMenuRef.current &&
+        !secondaryMenuRef.current.contains(event.target as Node) &&
+        moreButtonRef.current &&
+        !moreButtonRef.current.contains(event.target as Node)
+      ) {
+        setIsSecondaryMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSecondaryMenuOpen(false);
+      }
+    };
+
+    if (isSecondaryMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSecondaryMenuOpen]);
 
   const handleNavigate = useCallback((route: RouteId) => {
     if (isNavigatingRef.current) return;
@@ -474,6 +508,7 @@ function Sidebar({
     if (isMobileOpen) {
       onRequestCloseMobile();
     }
+    setIsSecondaryMenuOpen(false);
     setTimeout(() => { isNavigatingRef.current = false; }, 300);
   }, [isMobileOpen, onNavigate, onRequestCloseMobile]);
 
@@ -538,53 +573,56 @@ function Sidebar({
     return (
     <div className="flex flex-col h-full">
       <div
-        className={`flex items-center border-b flex-shrink-0 ${
-          isDarkMode ? 'border-slate-700/60' : 'border-slate-200'
-        } ${isCompact ? 'justify-center px-3 py-4' : 'justify-between px-4 py-4'}`}
-      >
-        {isCompact ? (
-          <button
-            type="button"
-            onClick={onToggleCollapsed}
-            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all duration-200 cursor-pointer ${
-              isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-brand-bg hover:bg-slate-200'
-            }`}
-            aria-label="Expandir menu lateral"
-          >
-            <ChevronRight
-              className={`w-5 h-5 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}
-            />
-          </button>
-        ) : (
-          <>
-            <img
-              src="/logo.png"
-              alt="Logo Granja de Bolso"
-              className="h-14 w-auto object-contain drop-shadow-sm sm:h-16"
-            />
+          className={`h-16 flex items-center flex-shrink-0 transition-all duration-250 ${isCompact ? 'justify-center px-3' : 'justify-between px-6'}`}
+          style={{
+            background: isDarkMode 
+              ? 'linear-gradient(to right, #0f172a, #1e293b)' 
+              : 'linear-gradient(to right, var(--brand-bg) 0%, var(--brand-main) 100%)',
+          }}
+        >
+          {isCompact ? (
             <button
               type="button"
               onClick={onToggleCollapsed}
-              className={`hidden md:inline-flex w-9 h-9 items-center justify-center rounded-xl transition-all duration-200 cursor-pointer shadow-sm flex-shrink-0 ${
-                isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white hover:bg-slate-100 border border-slate-200'
+              className={`w-10 h-10 flex items-center justify-center rounded-2xl transition-all duration-250 cursor-pointer active:scale-95 shadow-sm ${
+                isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white hover:bg-slate-50'
               }`}
-              aria-label="Recolher menu lateral"
+              aria-label="Expandir menu lateral"
             >
-              <ChevronLeft className={`w-4 h-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`} />
+              <ChevronRight
+                className={`w-5 h-5 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`}
+              />
             </button>
-            <button
-              type="button"
-              onClick={onRequestCloseMobile}
-              className={`md:hidden w-9 h-9 inline-flex items-center justify-center rounded-xl transition-all duration-200 cursor-pointer shadow-sm ${
-                isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white hover:bg-slate-100'
-              }`}
-              aria-label="Fechar menu lateral"
-            >
-              <ChevronLeft className={`w-4 h-4 ${isDarkMode ? 'text-slate-300' : 'text-slate-500'}`} />
-            </button>
-          </>
-        )}
-      </div>
+          ) : (
+            <>
+              <img
+                src="/logo.png"
+                alt="Logo Granja de Bolso"
+                className="h-10 w-auto object-contain drop-shadow-sm"
+              />
+              <button
+                type="button"
+                onClick={onToggleCollapsed}
+                className={`hidden md:inline-flex w-10 h-10 items-center justify-center rounded-2xl transition-all duration-250 cursor-pointer active:scale-95 shadow-sm flex-shrink-0 ${
+                  isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white hover:bg-slate-50'
+                }`}
+                aria-label="Recolher menu lateral"
+              >
+                <ChevronLeft className={`w-5 h-5 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`} />
+              </button>
+              <button
+                type="button"
+                onClick={onRequestCloseMobile}
+                className={`md:hidden w-10 h-10 inline-flex items-center justify-center rounded-2xl transition-all duration-250 cursor-pointer active:scale-95 shadow-sm ${
+                  isDarkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white hover:bg-slate-50'
+                }`}
+                aria-label="Fechar menu lateral"
+              >
+                <ChevronLeft className={`w-5 h-5 ${isDarkMode ? 'text-slate-300' : 'text-slate-600'}`} />
+              </button>
+            </>
+          )}
+        </div>
 
       <nav
         className="flex-1 overflow-y-auto px-3 py-4 space-y-1.5 scrollbar-thin"
@@ -677,15 +715,61 @@ function Sidebar({
 
   const isMoreActive = !bottomNavGroups.some((grp) => grp.routes.includes(activeRoute));
 
+  // List of additional menu items to show in the secondary floating menu
+  const additionalMenuItems = useMemo<MenuItem[]>(() => {
+    if (allowedRoutes?.length) {
+      return allowedRoutes
+        .filter(route => !bottomNavGroups.some(grp => grp.routes.includes(route)))
+        .map(route => {
+          const cat = categories.find(c => 
+            (c.kind === 'single' && c.item.id === route) || 
+            (c.kind === 'group' && c.items.some(item => item.id === route))
+          );
+          let item: MenuItem | undefined;
+          if (cat?.kind === 'single') {
+            item = cat.item;
+          } else if (cat?.kind === 'group') {
+            item = cat.items.find(i => i.id === route);
+          }
+          if (!item) {
+            // Fallback if not found
+            return { id: route, label: route, icon: <Cog className="w-5 h-5" /> };
+          }
+          return item;
+        });
+    }
+
+    // Default additional items when no allowedRoutes
+    return [
+      { id: 'formulacao', label: 'Formulação', icon: <Beaker className="w-5 h-5" /> },
+      { id: 'animais', label: 'Animais', icon: <Bird className="w-5 h-5" /> },
+      { id: 'galpoes', label: 'Galpões', icon: <Home className="w-5 h-5" /> },
+      { id: 'profissionais', label: 'Profissionais', icon: <HeartPulse className="w-5 h-5" /> },
+      { id: 'cliente', label: 'Clientes', icon: <Users className="w-5 h-5" /> },
+      { id: 'fornecedor', label: 'Fornecedores', icon: <Truck className="w-5 h-5" /> },
+      { id: 'compras', label: 'Compras', icon: <ShoppingCart className="w-5 h-5" /> },
+      { id: 'financeiro', label: 'Financeiro', icon: <Wallet className="w-5 h-5" /> },
+      { id: 'investimentos', label: 'Investimentos', icon: <Calculator className="w-5 h-5" /> },
+      { id: 'relatorios', label: 'Relatórios', icon: <FileText className="w-5 h-5" /> },
+      { id: 'clima', label: 'Clima', icon: <CloudSun className="w-5 h-5" /> },
+      { id: 'conhecimento', label: 'Conhecimento', icon: <BookOpen className="w-5 h-5" /> },
+      { id: 'perfil', label: 'Perfil', icon: <UserCircle2 className="w-5 h-5" /> },
+      { id: 'personalizacao', label: 'Personalização', icon: <Palette className="w-5 h-5" /> },
+      { id: 'sistema', label: 'Sistema', icon: <SlidersHorizontal className="w-5 h-5" /> },
+      { id: 'backups', label: 'Backups', icon: <DatabaseBackup className="w-5 h-5" /> },
+      { id: 'assinatura', label: 'Assinatura', icon: <Cog className="w-5 h-5" /> },
+    ];
+  }, [allowedRoutes, bottomNavGroups, categories]);
+
   // -------------------------------------------------------------------------
   // Classes
   // -------------------------------------------------------------------------
   const widthClass = isCollapsed ? 'w-[4.5rem]' : 'w-64';
-  const desktopClass = `hidden md:flex ${widthClass} flex-col z-40 overflow-visible transition-all duration-300 ${
+  const desktopClass = `hidden md:flex ${widthClass} flex flex-col z-40 overflow-visible transition-all duration-300 shadow-xl rounded-2xl ${
     isDarkMode
-      ? 'bg-slate-900 border-slate-700/60'
-      : 'bg-white border-slate-200'
-  } border-r shadow-xl`;
+      ? 'bg-slate-900'
+      : 'bg-white'
+  } fixed top-4 left-4 bottom-4`;
 
   return (
     <>
@@ -726,13 +810,14 @@ function Sidebar({
 
       {/* Mobile bottom nav */}
       <nav
-        className={[
-          'md:hidden fixed left-0 right-0 bottom-0 z-30 border-t backdrop-blur-xl',
-          isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200',
-        ].join(' ')}
-        aria-label="Navegação inferior"
-        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 0.5rem)' }}
-      >
+          className="md:hidden fixed left-4 right-4 bottom-4 z-30 backdrop-blur-xl rounded-2xl shadow-xl"
+          style={{
+            background: isDarkMode 
+              ? 'rgba(15, 23, 42, 0.95)' 
+              : 'linear-gradient(to right, var(--brand-bg) 0%, var(--brand-main) 100%)',
+          }}
+          aria-label="Navegação inferior"
+        >
         <div className="relative grid grid-cols-4 gap-1 px-2 pt-2 pb-1">
           {bottomNavGroups.map((grp) => {
             const isActive = grp.routes.includes(activeRoute);
@@ -774,8 +859,9 @@ function Sidebar({
 
           {!allowedRoutes?.length && (
             <button
+              ref={moreButtonRef}
               type="button"
-              onClick={onRequestOpenMobile}
+              onClick={() => setIsSecondaryMenuOpen(!isSecondaryMenuOpen)}
               className={[
                 'relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-2xl px-1.5 py-2 text-[11px] font-semibold tracking-[0.01em] transition-all duration-300 overflow-hidden group',
                 isMoreActive
@@ -788,6 +874,8 @@ function Sidebar({
               ].join(' ')}
               style={isMoreActive ? { color: 'var(--brand-primary)' } : undefined}
               aria-label="Mais opções"
+              aria-expanded={isSecondaryMenuOpen}
+              aria-haspopup="menu"
             >
               <div 
                 className={`absolute inset-0 transition-transform duration-300 rounded-2xl ${isMoreActive ? 'scale-100 opacity-100' : 'scale-50 opacity-0'} ${isDarkMode ? 'bg-brand-primary/10' : 'bg-brand-primary/10'}`}
@@ -804,6 +892,62 @@ function Sidebar({
               </span>
             </button>
           )}
+        </div>
+
+        {/* Secondary floating menu */}
+        <div
+          className="absolute z-50 bottom-[calc(70px+0.5rem)] right-0 w-64 transition-all duration-300"
+          style={{
+            opacity: isSecondaryMenuOpen ? 1 : 0,
+            transform: isSecondaryMenuOpen ? 'translateY(0) scale(1)' : 'translateY(10px) scale(0.95)',
+            pointerEvents: isSecondaryMenuOpen ? 'auto' : 'none',
+          }}
+        >
+          <div 
+            ref={secondaryMenuRef}
+            className={[
+              'w-full rounded-2xl shadow-2xl border overflow-hidden',
+              isDarkMode 
+                ? 'bg-slate-900 border-slate-700' 
+                : 'bg-white border-slate-200'
+            ].join(' ')}
+            role="menu"
+            aria-label="Mais opções"
+          >
+            <div className="max-h-[50vh] overflow-y-auto py-2">
+              {additionalMenuItems.map(item => {
+                const isActive = activeRoute === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      handleNavigate(item.id);
+                      setIsSecondaryMenuOpen(false);
+                    }}
+                    className={[
+                      'w-full flex items-center gap-3 px-4 py-3 text-left text-sm font-medium leading-5 tracking-[0.01em] transition-[background-color,color,box-shadow] duration-150',
+                      isActive
+                        ? isDarkMode
+                          ? 'bg-slate-800/90 text-brand-primary'
+                          : 'bg-brand-bg text-brand-primary'
+                        : isDarkMode
+                        ? 'text-slate-300 hover:bg-slate-800/70'
+                        : 'text-slate-700 hover:bg-slate-100'
+                    ].join(' ')}
+                    aria-current={isActive ? 'page' : undefined}
+                    aria-label={item.label}
+                    role="menuitem"
+                  >
+                    <span className="flex-shrink-0">
+                      {cloneMenuIcon(item.icon, 'h-5 w-5')}
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </nav>
     </>
