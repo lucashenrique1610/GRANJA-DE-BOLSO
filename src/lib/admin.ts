@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { apiFetch } from '@/lib/observability';
 
 export interface AdminAccessView {
   hasAccess: boolean;
@@ -84,31 +85,16 @@ async function getAuthHeaders() {
   };
 }
 
-async function parseResponse<T>(response: Response): Promise<T> {
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(
-      payload && typeof payload === 'object' && 'error' in payload
-        ? String(payload.error)
-        : 'Falha ao processar a requisicao administrativa.',
-    );
-  }
-
-  return payload as T;
-}
-
 export async function fetchAdminUsersOverview() {
-  const response = await fetch('/api/admin/users-overview', {
+  return apiFetch<AdminUsersOverviewResponse>('/api/admin/users-overview', {
     headers: await getAuthHeaders(),
     credentials: 'same-origin',
+    label: 'admin.users-overview',
   });
-
-  return parseResponse<AdminUsersOverviewResponse>(response);
 }
 
 export async function updateUserPromoterAccess(userId: string, enabled: boolean, notes?: string) {
-  const response = await fetch('/api/admin/promoter-access', {
+  return apiFetch<{ user: unknown; message: string }>('/api/admin/promoter-access', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -116,7 +102,6 @@ export async function updateUserPromoterAccess(userId: string, enabled: boolean,
     },
     credentials: 'same-origin',
     body: JSON.stringify({ userId, enabled, notes: notes ?? null }),
+    label: 'admin.promoter-access',
   });
-
-  return parseResponse<{ user: unknown; message: string }>(response);
 }

@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 import Stripe from 'stripe';
 import { getBillingPlanByPriceId } from './billing-config.js';
+import { instrumentSupabaseClient, Logger } from './observability.js';
 
 function jsonResult(status, payload) {
   return { status, payload };
 }
 
-function getSupabaseUrl() {
+export function getSupabaseUrl() {
   return process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
 }
 
@@ -46,12 +47,15 @@ export function getSupabaseAdminClient() {
     return null;
   }
 
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  });
+  return instrumentSupabaseClient(
+    createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }),
+    new Logger(),
+  );
 }
 
 export function ensureBillingServerConfiguration() {

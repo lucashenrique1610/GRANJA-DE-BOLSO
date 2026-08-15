@@ -1,3 +1,4 @@
+import { withObservability } from '../../server/observability.js';
 import {
   clearSubscriptionForUser,
   ensureBillingServerConfiguration,
@@ -6,7 +7,7 @@ import {
   upsertSubscriptionFromStripeSubscription,
 } from '../../server/billing-store.js';
 
-export default async function handler(req, res) {
+export default withObservability(async function handler(req, res, ctx) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     res.status(405).json({ error: 'Metodo nao permitido.' });
@@ -32,12 +33,14 @@ export default async function handler(req, res) {
     const signature = req.headers['stripe-signature'];
 
     if (!signature || typeof signature !== 'string') {
+      ctx.warn('webhook.signature_missing');
       res.status(400).json({ error: 'Assinatura do webhook ausente.' });
       return;
     }
 
     const rawBody = await readRawBody(req);
     const event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    ctx.info('webhook.received', { eventType: event.type, eventId: event.id });
 
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -87,12 +90,13 @@ export default async function handler(req, res) {
 
     res.status(200).json({ received: true });
   } catch (error) {
-    console.error('Erro ao processar webhook Stripe:', error);
+    ctx.error('webhook.processing_failed', error);
     res.status(400).json({
       error:
         error instanceof Error
           ? error.message
           : 'Falha ao processar o webhook da Stripe.',
+      requestId: ctx.requestId,
     });
   }
-}
+});

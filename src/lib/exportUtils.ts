@@ -17,7 +17,7 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#39;');
 }
 
-function sanitizeSpreadsheetCell(value: string) {
+export function sanitizeSpreadsheetCell(value: string) {
   const trimmedStart = value.trimStart();
   if (/^[=+\-@]/.test(trimmedStart)) {
     return `'${value}`;

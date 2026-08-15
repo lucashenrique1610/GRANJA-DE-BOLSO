@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/observability';
 import { supabase } from '@/lib/supabase';
 
 export type BillingPlanCode =
@@ -89,31 +90,16 @@ async function getAuthHeaders() {
   };
 }
 
-async function parseResponse<T>(response: Response): Promise<T> {
-  const payload = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(
-      payload && typeof payload === 'object' && 'error' in payload
-        ? String(payload.error)
-        : 'Falha ao processar a requisicao de assinatura.',
-    );
-  }
-
-  return payload as T;
-}
-
 export async function fetchBillingStatus() {
-  const response = await fetch('/api/billing/subscription-status', {
+  return apiFetch<BillingStatusResponse>('/api/billing/subscription-status', {
     headers: await getAuthHeaders(),
     credentials: 'same-origin',
+    label: 'billing.subscription-status',
   });
-
-  return parseResponse<BillingStatusResponse>(response);
 }
 
 export async function createCheckoutSession(planCode: BillingPlanCode) {
-  const response = await fetch('/api/billing/create-checkout-session', {
+  return apiFetch<{ url: string; sessionId: string }>('/api/billing/create-checkout-session', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -121,19 +107,17 @@ export async function createCheckoutSession(planCode: BillingPlanCode) {
     },
     credentials: 'same-origin',
     body: JSON.stringify({ planCode }),
+    label: 'billing.create-checkout-session',
   });
-
-  return parseResponse<{ url: string; sessionId: string }>(response);
 }
 
 export async function createPortalSession() {
-  const response = await fetch('/api/billing/create-portal-session', {
+  return apiFetch<{ url: string }>('/api/billing/create-portal-session', {
     method: 'POST',
     headers: {
       ...(await getAuthHeaders()),
     },
     credentials: 'same-origin',
+    label: 'billing.create-portal-session',
   });
-
-  return parseResponse<{ url: string }>(response);
 }

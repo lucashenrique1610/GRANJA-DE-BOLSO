@@ -20,7 +20,8 @@ import {
 } from 'chart.js';
 import { Bar, Pie } from 'react-chartjs-2';
 import Papa from 'papaparse';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { sanitizeSpreadsheetCell } from '@/lib/exportUtils';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Download, Filter, Loader2, TrendingUp, TrendingDown, BarChart3, PieChart } from 'lucide-react';
@@ -221,7 +222,16 @@ export default function RelatoriosPage({
         })),
       ].sort((a, b) => b.Data.localeCompare(a.Data));
 
-      const csv = Papa.unparse(combinedTransactions);
+      const sanitizedRows = combinedTransactions.map((transaction) =>
+        Object.fromEntries(
+          Object.entries(transaction).map(([key, value]) => [
+            key,
+            typeof value === 'string' ? sanitizeSpreadsheetCell(value) : value,
+          ]),
+        ),
+      );
+
+      const csv = Papa.unparse(sanitizedRows);
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -237,7 +247,7 @@ export default function RelatoriosPage({
     }
   };
 
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     setIsLoading(true);
     try {
       const combinedTransactions = [
@@ -259,10 +269,28 @@ export default function RelatoriosPage({
         })),
       ].sort((a, b) => b.Data.localeCompare(a.Data));
 
-      const ws = XLSX.utils.json_to_sheet(combinedTransactions);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Transações');
-      XLSX.writeFile(wb, `relatorio-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('Transações');
+      sheet.addRow(Object.keys(combinedTransactions[0] ?? {}));
+      for (const transaction of combinedTransactions) {
+        sheet.addRow(transaction);
+      }
+      sheet.columns.forEach((column) => {
+        column.width = Math.max(12, (column.values?.[0]?.toString?.().length ?? 0) + 2);
+      });
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `relatorio-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Erro ao exportar Excel:', error);
     } finally {

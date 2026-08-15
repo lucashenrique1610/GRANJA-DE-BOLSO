@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { instrumentSupabaseClient } from './observability.js';
 
 const APP_ROLE_ORDER = {
   usuario: 1,
@@ -36,17 +37,19 @@ function createRequestSupabaseClient(token, config = getSupabaseServerConfig()) 
     return null;
   }
 
-  return createClient(config.supabaseUrl, config.supabaseAnonKey, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-    global: {
-      headers: {
-        Authorization: `Bearer ${token}`,
+  return instrumentSupabaseClient(
+    createClient(config.supabaseUrl, config.supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
       },
-    },
-  });
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      },
+    }),
+  );
 }
 
 export async function authenticateRequest(headers) {
@@ -106,16 +109,23 @@ export function authorizeAppRole(context, requiredRole) {
 
 /**
  * Middleware HOF para proteger rotas com autenticação.
- * Passa o authResult para o handler no terceiro argumento.
+ * Passa o authResult para o handler no terceiro argumento e o contexto
+ * de observabilidade (requestId/logs) no quarto.
  */
 export function withAuth(handler) {
-  return async (req, res) => {
+  return async (req, res, ctx) => {
     const authResult = await authenticateRequest(req.headers);
     if ('status' in authResult) {
+      ctx?.logger?.info('auth.rejected', {
+        status: authResult.status,
+        reason: authResult.payload?.error,
+        method: req.method,
+        path: req.url,
+      });
       res.status(authResult.status).json(authResult.payload);
       return;
     }
-    return handler(req, res, authResult);
+    return handler(req, res, authResult, ctx);
   };
 }
 
@@ -124,12 +134,19 @@ export function withAuth(handler) {
  * Já inclui a verificação de autenticação (withAuth internamente).
  */
 export function withRole(requiredRole, handler) {
-  return withAuth(async (req, res, authResult) => {
+  return withAuth(async (req, res, authResult, ctx) => {
     const roleResult = authorizeAppRole(authResult, requiredRole);
     if ('status' in roleResult) {
+      ctx?.logger?.info('authz.rejected', {
+        status: roleResult.status,
+        requiredRole,
+        actualRole: authResult.appRole,
+        method: req.method,
+        path: req.url,
+      });
       res.status(roleResult.status).json(roleResult.payload);
       return;
     }
-    return handler(req, res, authResult);
+    return handler(req, res, authResult, ctx);
   });
 }
