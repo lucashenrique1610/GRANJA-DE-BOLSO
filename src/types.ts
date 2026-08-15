@@ -515,38 +515,39 @@ export interface BackupRecord {
   snapshot: BackupSnapshot;
 }
 
-export type KnowledgeModuleId =
-  | 'fundamentos-criacao-caipira'
+export type KnowledgeCategoryId =
+  | 'fundamentos'
+  | 'planejamento-da-granja'
   | 'instalacoes'
-  | 'escolha-da-linhagem'
-  | 'cria'
-  | 'recria'
-  | 'pre-postura'
-  | 'postura'
-  | 'nutricao'
-  | 'manejo-da-agua'
-  | 'sanidade'
-  | 'vacinacao'
-  | 'biosseguridade'
-  | 'producao-de-ovos'
-  | 'classificacao-de-ovos'
-  | 'comercializacao'
-  | 'custos'
-  | 'indicadores-zootecnicos'
-  | 'bem-estar-animal'
-  | 'manejo-de-piquetes'
-  | 'reproducao'
-  | 'incubacao'
-  | 'gestao-da-propriedade'
-  | 'solucao-de-problemas';
-
-export type KnowledgeCategory =
-  | 'instalações'
-  | 'produção'
+  | 'equipamentos'
+  | 'genetica-e-linhagens'
   | 'manejo'
+  | 'fases-da-producao'
+  | 'nutricao'
+  | 'formulacao-de-racao'
   | 'sanidade'
-  | 'negócios'
-  | 'gestão';
+  | 'reproducao-e-incubacao'
+  | 'producao-de-ovos'
+  | 'comercializacao'
+  | 'gestao'
+  | 'sustentabilidade'
+  | 'legislacao'
+  | 'solucao-de-problemas'
+  | 'biblioteca-tecnica'
+  | 'faq'
+  | 'ferramentas-tecnicas';
+
+// Retrocompatibilidade: aceitar os antigos nomes de categoria
+export type KnowledgeCategoryIdOrLegacy = KnowledgeCategoryId | 'instalações' | 'produção' | 'gestão' | 'negócios';
+
+export type KnowledgeModuleId = string;
+
+export interface KnowledgeCategory {
+  id: KnowledgeCategoryId;
+  title: string;
+  summary: string;
+  modules: KnowledgeModule[];
+}
 
 export interface KnowledgeParameter {
   name: string;
@@ -580,17 +581,26 @@ export interface KnowledgeIntelligentRule {
 export interface KnowledgeModule {
   id: KnowledgeModuleId;
   title: string;
-  category: KnowledgeCategory;
+  category: KnowledgeCategoryIdOrLegacy;
   summary: string;
-  objective: string;
+  introduction?: string;
+  objectives?: string[];
+  fundamentalConcepts?: string[];
   technicalContent: string[];
-  importantParameters: KnowledgeParameter[];
   bestPractices: string[];
-  commonProblems: KnowledgeProblem[];
+  stepByStep?: string[];
   commonMistakes: string[];
-  managementChecklist: KnowledgeChecklistItem[];
-  intelligentRules: KnowledgeIntelligentRule[];
+  practicalChecklist?: KnowledgeChecklistItem[];
+  technicalTables?: KnowledgeParameter[];
+  expertTips?: string[];
+  faq?: { question: string; answer: string }[];
   technicalSources: string[];
+  // Campos mantidos para retrocompatibilidade
+  objective?: string;
+  importantParameters?: KnowledgeParameter[];
+  commonProblems?: KnowledgeProblem[];
+  managementChecklist?: KnowledgeChecklistItem[];
+  intelligentRules?: KnowledgeIntelligentRule[];
 }
 
 export const THEME_PALETTES: Record<ThemePaletteId, ThemePalette> = {
@@ -667,3 +677,150 @@ export const THEME_PALETTES: Record<ThemePaletteId, ThemePalette> = {
     },
   },
 };
+
+// --- NEW: Intelligent Recommendation System Types ---
+export type HeaterType =
+  | 'campainha_eletrica'
+  | 'campainha_gas'
+  | 'aquecedor_infravermelho'
+  | 'radiador_oleo'
+  | 'nenhum'
+  | 'outro';
+
+export interface IntelligentRecommendationContext {
+  lotId?: string;
+  species?: string;
+  ageDays: number;
+  phase?: NutritionalPhase;
+  birdCount: number;
+  heaterType?: HeaterType;
+  currentTemp?: number; // Current ambient temperature in °C
+  weatherData?: UnifiedWeatherData;
+  // Add more context fields as needed (region, equipment, etc.)
+}
+
+export type QuestionType = 'single_choice' | 'text' | 'number';
+
+export interface QuestionOption {
+  value: string;
+  label: string;
+}
+
+export interface Question {
+  id: string;
+  text: string;
+  type: QuestionType;
+  options?: QuestionOption[];
+  placeholder?: string;
+}
+
+export interface PersonalizedTip {
+  id: string;
+  title: string;
+  content: string;
+  priority: 'alta' | 'media' | 'baixa';
+  category: 'aquecimento' | 'nutricao' | 'sanidade' | 'instalacoes' | 'geral';
+  sourceModule?: string;
+}
+
+export interface RecommendationFlow {
+  id: string;
+  name: string;
+  triggers: (ctx: IntelligentRecommendationContext) => boolean;
+  questions: Question[];
+  getRecommendations: (ctx: IntelligentRecommendationContext, answers: Record<string, any>) => PersonalizedTip[];
+}
+
+export type VaccineApplicationMethod =
+  | 'subcutanea'
+  | 'spray'
+  | 'ocular'
+  | 'agua_bebida'
+  | 'puncao_asa'
+  | 'intramuscular';
+
+export type VaccineCaipiraDose = 'unica' | 'primeira' | 'segunda' | 'reforco' | 'reforco_adulto';
+
+export interface VaccineScheduleEntry {
+  id: string;
+  ageMinDays: number;
+  ageMaxDays: number;
+  targetAgeDays: number;
+  vaccines: string[];
+  applicationMethod: VaccineApplicationMethod;
+  dose: VaccineCaipiraDose;
+  isObligatory: boolean;
+  pastureCritical: boolean;
+  notes: string;
+  category: 'incubatorio' | 'cria' | 'recria' | 'pre_postura' | 'postura_adulta';
+  source: 'embrapa' | 'ima' | 'mapa' | 'programa_nacional_sanidade_aviaria';
+  adjustmentForCaipira?: string;
+}
+
+export type LtiRiskRegionMG =
+  | 'terras_altas_mantiqueira'
+  | 'sul_minas'
+  | 'demais_regioes';
+
+export const LTI_RISK_MUNICIPIOS_MG: Record<LtiRiskRegionMG, string[]> = {
+  terras_altas_mantiqueira: [
+    'Itamonte', 'Itanhandu', 'Passa Quatro', 'Pouso Alto',
+    'Caxambu', 'São Lourenço', 'Pocos de Caldas', 'Lambari',
+  ],
+  sul_minas: [
+    'Poços de Caldas', 'Varginha', 'Passos', 'Alfenas',
+    'Lavras', 'Três Corações', 'Itajubá', 'Santa Rita do Sapucaí',
+  ],
+  demais_regioes: [],
+};
+
+export interface CaipiraHealthRules {
+  boubaAnticipada: boolean;
+  ltiRecombinanteObrigatorio: boolean;
+  coccidioseIncubatorio: boolean;
+  vermifugacaoIntervaloMeses: 3 | 4;
+  takeTestObrigatorio: boolean;
+  biosseguridadePiqueteDrenagem: boolean;
+  regiaoLTI: LtiRiskRegionMG;
+}
+
+export interface ScheduledVaccineReminder {
+  id: string;
+  animalId: string;
+  animalTag: string;
+  scheduleEntryId: string;
+  vaccines: string[];
+  applicationMethod: VaccineApplicationMethod;
+  scheduledDate: string;
+  ageAtScheduledDateDays: number;
+  currentAgeDays: number;
+  daysUntil: number;
+  status: 'atrasado' | 'hoje' | 'pendente' | 'proximo' | 'concluido';
+  pastureCritical: boolean;
+  category: VaccineScheduleEntry['category'];
+  notes: string;
+  adjustmentNote?: string;
+  priority: 'urgent' | 'high' | 'medium' | 'low';
+}
+
+export interface TakeTestReminder {
+  id: string;
+  animalId: string;
+  animalTag: string;
+  boubaAppliedDate: string;
+  testDate: string;
+  daysUntil: number;
+  status: 'atrasado' | 'hoje' | 'pendente' | 'concluido';
+}
+
+export interface VermifugacaoReminder {
+  id: string;
+  animalId: string;
+  animalTag: string;
+  lastDewormingDate: string | null;
+  scheduledDate: string;
+  daysUntil: number;
+  intervalMonths: 3 | 4;
+  status: 'atrasado' | 'hoje' | 'pendente' | 'proximo';
+  observation: string;
+}

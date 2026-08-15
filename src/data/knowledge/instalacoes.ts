@@ -229,6 +229,7 @@ export const instalacoes: KnowledgeModule = {
     }
   ],
   technicalSources: [
+    'AMARAL, Edilson Sousa do. Galinhas poedeiras: criação em semiconfinamento. 2ª edição. Brasília: EMATER-DF, 2009.',
     'EMBRAPA Suínos e Aves. Sistema de Produção de Ovos Caipira. Circular Técnica nº 56. 2010.',
     'EMBRAPA Meio Norte. Criação de Galinhas Caipiras para Produção de Ovos. 2018.',
     'Manual de Instalações Avícolas. Associação Brasileira de Avicultura (ABA), 2019.',

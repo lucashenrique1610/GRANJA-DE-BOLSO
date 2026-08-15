@@ -1,6 +1,6 @@
 ![TrustSiteMonitor](https://trustsitemonitor.com/assets/images/logo.png)
 
-# 🔴 Relatório de Segurança — https://granjadebolso3-1.vercel.app
+# 🔴 Relatório de Segurança — https://www.granjadebolso.online
 **Data da auditoria:** 2026-07-01 23:43 UTC
 **Status geral:** 🔴 Critico
 **Tecnologias detectadas:** Vercel
@@ -63,7 +63,7 @@ Adicionar: Permissions-Policy: camera=(), microphone=(), geolocation=(), payment
 **Descrição:** O endpoint '/api/auth/login' aceitou 6 tentativas de autenticação consecutivas sem retornar HTTP 429 — vulnerável a ataques de força bruta e credential stuffing.
 **Evidência:**
 ```
-6 requisições POST para https://granjadebolso3-1.vercel.app/api/auth/login
+6 requisições POST para https://www.granjadebolso.online/api/auth/login
 Respostas: 403, 403, 403, 403, 403, 403 — nenhuma foi 429 (Too Many Requests).
 ```
 **Correção:**
@@ -79,7 +79,7 @@ Adicionar CAPTCHA após 3 tentativas e bloqueio temporário após 5.
 **Descrição:** Porta de comunicação entre nós do Elasticsearch exposta — pode permitir injeção no cluster.
 **Evidência:**
 ```
-Conexão TCP bem-sucedida para granjadebolso3-1.vercel.app:9300 — porta acessível publicamente da internet.
+Conexão TCP bem-sucedida para www.granjadebolso.online:9300 — porta acessível publicamente da internet.
 ```
 **Correção:**
 ```
@@ -91,7 +91,7 @@ Restringir no firewall para comunicação apenas entre nós do cluster.
 **Descrição:** Docker daemon exposto sem TLS — permite controle total do servidor, escalonamento de privilégios e acesso root ao host.
 **Evidência:**
 ```
-Conexão TCP bem-sucedida para granjadebolso3-1.vercel.app:2375 — porta acessível publicamente da internet.
+Conexão TCP bem-sucedida para www.granjadebolso.online:2375 — porta acessível publicamente da internet.
 ```
 **Correção:**
 ```
@@ -104,7 +104,7 @@ Se precisar de acesso remoto, usar TLS mútuo ou SSH tunneling.
 **Descrição:** Elasticsearch acessível da internet via HTTP — expõe todos os índices e dados sem autenticação.
 **Evidência:**
 ```
-Conexão TCP bem-sucedida para granjadebolso3-1.vercel.app:9200 — porta acessível publicamente da internet.
+Conexão TCP bem-sucedida para www.granjadebolso.online:9200 — porta acessível publicamente da internet.
 ```
 **Correção:**
 ```
@@ -116,7 +116,7 @@ Restringir no firewall. Habilitar autenticação no elasticsearch.yml: xpack.sec
 **Descrição:** PostgreSQL acessível diretamente da internet — banco de dados deve ser acessível apenas internamente.
 **Evidência:**
 ```
-Conexão TCP bem-sucedida para granjadebolso3-1.vercel.app:5432 — porta acessível publicamente da internet.
+Conexão TCP bem-sucedida para www.granjadebolso.online:5432 — porta acessível publicamente da internet.
 ```
 **Correção:**
 ```
@@ -129,7 +129,7 @@ No pg_hba.conf: usar host/hostssl com IPs específicos.
 **Descrição:** Memcached acessível da internet — sem autenticação nativa, amplamente explorado em ataques DDoS de amplificação.
 **Evidência:**
 ```
-Conexão TCP bem-sucedida para granjadebolso3-1.vercel.app:11211 — porta acessível publicamente da internet.
+Conexão TCP bem-sucedida para www.granjadebolso.online:11211 — porta acessível publicamente da internet.
 ```
 **Correção:**
 ```
@@ -141,7 +141,7 @@ Bloquear no firewall imediatamente. Adicionar -l 127.0.0.1 nos parâmetros de in
 **Descrição:** Porta AMQP do RabbitMQ acessível da internet — filas de mensagens devem ser internas.
 **Evidência:**
 ```
-Conexão TCP bem-sucedida para granjadebolso3-1.vercel.app:5672 — porta acessível publicamente da internet.
+Conexão TCP bem-sucedida para www.granjadebolso.online:5672 — porta acessível publicamente da internet.
 ```
 **Correção:**
 ```

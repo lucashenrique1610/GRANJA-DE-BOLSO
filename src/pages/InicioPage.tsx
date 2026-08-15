@@ -8,6 +8,7 @@ import {
   SystemSettingsData,
   FarmConfigData,
   UnifiedWeatherData,
+  HealthRecord,
 } from '@/types';
 import { getWeatherData, searchCity, readWeatherCache } from '@/lib/weather';
 import { RouteId } from '@/components/Sidebar';
@@ -31,8 +32,14 @@ import {
   Clock,
   PieChart,
   History,
-  Scale
+  Scale,
+  AlertTriangle,
+  Syringe,
 } from 'lucide-react';
+import {
+  aggregateUnifiedHealthAlerts,
+  buildCaipiraHealthRules,
+} from '@/lib/vaccineCaipiraMG';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -65,6 +72,7 @@ interface InicioPageProps {
   compras: PurchaseRecord[];
   manejos: ManejoRecord[];
   mortalities: MortalityRecord[];
+  healthRecords?: HealthRecord[];
   settings: SystemSettingsData;
   farm: FarmConfigData;
   onNavigate: (route: RouteId) => void;
@@ -83,6 +91,7 @@ export default function InicioPage({
   compras,
   manejos,
   mortalities,
+  healthRecords = [],
   settings,
   farm,
   onNavigate,
@@ -92,6 +101,24 @@ export default function InicioPage({
   const [weatherData, setWeatherData] = useState<UnifiedWeatherData | null>(null);
   const [performancePeriod, setPerformancePeriod] = useState<7 | 15 | 30>(7);
   const [performanceLot, setPerformanceLot] = useState<string>('all');
+
+  const healthRules = useMemo(
+    () => buildCaipiraHealthRules({
+      state: farm.state ?? 'MG',
+      city: farm.city,
+      isPastureAccess: true,
+    }),
+    [farm.state, farm.city],
+  );
+
+  const healthAlerts = useMemo(() => {
+    return aggregateUnifiedHealthAlerts({
+      animals,
+      healthRecords,
+      rules: healthRules,
+      maxDaysWindow: 30,
+    });
+  }, [animals, healthRecords, healthRules]);
   
   useEffect(() => {
     async function loadWeather() {
@@ -415,6 +442,37 @@ export default function InicioPage({
           </div>
         )}
       </div>
+
+      {/* Notificação sutil de Saúde (apenas lembrete para visitar a aba Saúde) */}
+      {healthAlerts.length > 0 && (
+        <div
+          onClick={() => onNavigate('manejo')}
+          className="rounded-2xl border border-slate-200 dark:border-slate-700/60 bg-white/80 dark:bg-slate-900/60 backdrop-blur px-4 py-3 shadow-sm cursor-pointer hover:bg-white dark:hover:bg-slate-900/80 hover:shadow-md transition-all group"
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="h-9 w-9 shrink-0 rounded-xl bg-brand-primary/10 dark:bg-brand-primary/20 flex items-center justify-center text-brand-primary">
+              <Syringe className="h-4.5 w-4.5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-bold text-[#0f1c2b] dark:text-slate-100">
+                  Acompanhamentos de Saúde Pendentes
+                </h3>
+                <span className="inline-flex items-center rounded-full bg-brand-primary/10 dark:bg-brand-primary/20 text-brand-primary px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em]">
+                  {healthAlerts.length} pend{healthAlerts.length === 1 ? 'a' : 'as'}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                Há vacinas, tratamentos ou consultas programadas. Consulte a aba Saúde para detalhes.
+              </p>
+            </div>
+            <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 inline-flex items-center gap-1 group-hover:text-brand-primary dark:group-hover:text-brand-primary transition-colors">
+              Ver Saúde
+              <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">

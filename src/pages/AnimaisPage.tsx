@@ -1,10 +1,20 @@
 import React, { useCallback, useMemo } from 'react';
 import CadastroSection, { CadastroColumn, CadastroField } from '@/components/CadastroSection';
-import { AnimalRecord, SupplierRecord } from '@/types';
+import { AnimalRecord, HealthRecord, SupplierRecord } from '@/types';
+import {
+  buildCaipiraHealthRules,
+  getNextVaccineRecommendation,
+} from '@/lib/vaccineCaipiraMG';
+import { AlertCircle, CheckCircle2, Calendar, Syringe } from 'lucide-react';
 
 interface AnimaisPageProps {
   records: AnimalRecord[];
   suppliers: SupplierRecord[];
+  healthRecords?: HealthRecord[];
+  farmState?: string;
+  farmCity?: string;
+  isPastureAccess?: boolean;
+  editingId?: string | null;
   onSave: (record: AnimalRecord) => Promise<void> | void;
   onDelete: (id: string) => Promise<void> | void;
   isLoading?: boolean;
@@ -225,6 +235,11 @@ function getSummary(items: AnimalRecord[]) {
 export default function AnimaisPage({
   records,
   suppliers,
+  healthRecords = [],
+  farmState,
+  farmCity,
+  isPastureAccess = true,
+  editingId,
   onSave,
   onDelete,
   isLoading,
@@ -282,6 +297,15 @@ export default function AnimaisPage({
     [supplierMap],
   );
 
+  const healthRules = useMemo(
+    () => buildCaipiraHealthRules({
+      state: farmState ?? 'MG',
+      city: farmCity,
+      isPastureAccess,
+    }),
+    [farmState, farmCity, isPastureAccess],
+  );
+
   const renderFormInsights = useCallback(
     (draft: Omit<AnimalRecord, 'id' | 'createdAt'>) => {
       const weeks = getAgeInWeeks(draft.birthDate);
@@ -291,6 +315,24 @@ export default function AnimaisPage({
         totalPurchasePrice: draft.totalPurchasePrice,
       });
       const supplierName = supplierMap.get(draft.supplierId) || 'Fornecedor não informado';
+
+      const nextVaccine = draft.birthDate
+        ? getNextVaccineRecommendation(
+            draft.birthDate,
+            new Date().toISOString(),
+            healthRules,
+            healthRecords,
+            editingId ?? undefined,
+          )
+        : null;
+
+      const statusTone = (() => {
+        if (!nextVaccine) return { chip: 'bg-slate-200 text-slate-700', ring: 'border-slate-300 bg-slate-50', icon: <CheckCircle2 className="h-4 w-4" />, text: 'Todas as vacinas do calendário inicial já foram aplicadas' };
+        if (nextVaccine.status === 'urgente') return { chip: 'bg-red-200 text-red-900', ring: 'border-red-300 bg-red-50', icon: <AlertCircle className="h-4 w-4" />, text: 'Atrasada — aplique imediatamente' };
+        if (nextVaccine.status === 'proximo') return { chip: 'bg-orange-200 text-orange-900', ring: 'border-orange-300 bg-orange-50', icon: <AlertCircle className="h-4 w-4" />, text: 'Aplicar nos próximos dias' };
+        if (nextVaccine.status === 'agendado') return { chip: 'bg-blue-200 text-blue-900', ring: 'border-blue-300 bg-blue-50', icon: <Calendar className="h-4 w-4" />, text: 'Agendada conforme calendário vacinal' };
+        return { chip: 'bg-emerald-200 text-emerald-900', ring: 'border-emerald-300 bg-emerald-50', icon: <CheckCircle2 className="h-4 w-4" />, text: 'Concluída' };
+      })();
 
       return (
         <div className="space-y-3">
@@ -323,6 +365,64 @@ export default function AnimaisPage({
             </div>
           </div>
 
+          <div>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <Syringe className="h-4 w-4 text-emerald-600" />
+              <h3 className="text-sm font-extrabold text-[#0f1c2b]">Próxima vacina recomendada</h3>
+              <span className="ml-auto text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500 bg-slate-100 border border-slate-200 rounded-full px-2 py-0.5">
+                Calendário IMA/MG caipira
+              </span>
+            </div>
+            {!draft.birthDate ? (
+              <div className="rounded-2xl border border-slate-300 bg-slate-50 p-3 text-sm text-slate-600">
+                Informe a <span className="font-bold">data de nascimento</span> do lote para visualizar a próxima vacina recomendada automaticamente.
+              </div>
+            ) : nextVaccine ? (
+              <div className={`rounded-2xl border p-4 ${statusTone.ring}`}>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.14em] ${statusTone.chip}`}>
+                    {statusTone.icon}
+                    {nextVaccine.status === 'urgente' ? 'Urgente' : nextVaccine.status === 'proximo' ? 'Próxima' : nextVaccine.status === 'agendado' ? 'Agendada' : 'Concluída'}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600 bg-white/70 border border-slate-300 rounded-full px-2 py-0.5">
+                    {nextVaccine.categoryLabel}
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600 bg-white/70 border border-slate-300 rounded-full px-2 py-0.5">
+                    {nextVaccine.applicationMethodLabel}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-baseline gap-3 mb-2">
+                  <h4 className="text-base font-extrabold text-[#0f1c2b] leading-tight">
+                    {nextVaccine.entry.vaccines.join(' + ')}
+                  </h4>
+                  <div className="text-xs text-slate-600">
+                    <span className="font-bold text-slate-700">{new Date(nextVaccine.scheduledDate).toLocaleDateString('pt-BR')}</span>
+                    <span className="mx-1.5 text-slate-400">•</span>
+                    <span>idade alvo: {nextVaccine.entry.ageMinDays}–{nextVaccine.entry.ageMaxDays} dias</span>
+                  </div>
+                </div>
+                {nextVaccine.daysUntil !== 0 && (
+                  <p className="text-xs text-slate-700 mb-1.5">
+                    {nextVaccine.daysUntil < 0
+                      ? <>Atrasada em <span className="font-bold text-red-700">{Math.abs(nextVaccine.daysUntil)} dia(s)</span>.</>
+                      : <>Faltam <span className="font-bold text-emerald-700">{nextVaccine.daysUntil} dia(s)</span> para a aplicação.</>}
+                    <span className="text-slate-500"> Idade atual: {nextVaccine.currentAgeDays} dias.</span>
+                  </p>
+                )}
+                {nextVaccine.notes && (
+                  <p className="text-xs text-slate-600 border-t border-white/50 pt-2 mt-1 leading-snug">
+                    {nextVaccine.notes}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+                <CheckCircle2 className="inline h-4 w-4 mr-2 -mt-0.5" />
+                Todas as vacinas do calendário inicial já foram aplicadas neste lote. Use a aba Saúde para reforços e acompanhamento contínuo.
+              </div>
+            )}
+          </div>
+
           <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-900">
             {supplierOptions.length === 0
               ? 'Cadastre primeiro um fornecedor ativo para vincular a compra das aves.'
@@ -331,7 +431,7 @@ export default function AnimaisPage({
         </div>
       );
     },
-    [supplierMap, supplierOptions.length],
+    [supplierMap, supplierOptions.length, healthRules, healthRecords, editingId],
   );
 
   return (

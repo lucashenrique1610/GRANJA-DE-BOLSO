@@ -1629,6 +1629,7 @@ export default function AppShell({
             compras={purchaseRecords}
             manejos={manejoRecords}
             mortalities={mortalityRecords}
+            healthRecords={healthRecords}
             settings={appState.systemSettings}
             farm={appState.farm}
             onNavigate={handleNavigate}
@@ -1650,6 +1651,9 @@ export default function AppShell({
             disponibilidadeVenda={disponibilidadeVenda}
             formulations={formulationRecords}
             formulatedFeedStock={formulatedFeedStockRecords}
+            farmState={appState.farm?.state}
+            farmCity={appState.farm?.city}
+            isPastureAccess={true}
             onSaveGalpao={upsertGalpao}
             onDeleteGalpao={removeGalpao}
             onSaveHealthProfessional={upsertHealthProfessional}
@@ -1707,6 +1711,10 @@ export default function AppShell({
           <AnimaisPage
             records={animalRecords}
             suppliers={supplierRecords}
+            healthRecords={healthRecords}
+            farmState={appState.farm?.state}
+            farmCity={appState.farm?.city}
+            isPastureAccess={true}
             onSave={upsertAnimal}
             onDelete={removeAnimal}
             isLoading={isCadastrosLoading}

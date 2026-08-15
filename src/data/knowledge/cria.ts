@@ -267,6 +267,7 @@ export const cria: KnowledgeModule = {
     }
   ],
   technicalSources: [
+    'AMARAL, Edilson Sousa do. Galinhas poedeiras: criação em semiconfinamento. 2ª edição. Brasília: EMATER-DF, 2009.',
     'EMBRAPA Suínos e Aves. Manejo de Pintinhos de Postura. Circular Técnica, 2012.',
     'EMBRAPA Meio Norte. Criação de Galinhas Caipiras para Produção de Ovos. 2018.',
     'Manual de Manejo de Pintinhos de Postura. Associação Brasileira de Avicultura (ABA), 2019.',

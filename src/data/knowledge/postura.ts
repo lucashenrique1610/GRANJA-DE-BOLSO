@@ -14,6 +14,13 @@ export const postura: KnowledgeModule = {
     '# 1. Alimentação na postura: A ração de postura deve fornecer nutrientes adequados para: produção de ovos, manutenção corporal, saúde e qualidade da casca. Principais nutrientes: proteína (16-18%), energia, cálcio (3.5-4.5%), fósforo, vitaminas e minerais. O cálcio é fundamental para a formação da casca dos ovos. A ração deve ser fornecida à vontade ou em horários regulares, evitando desperdício.',
     '# 2. Manejo da água: Água limpa e fresca é essencial, pois a ave consome aproximadamente 2-3 vezes mais água que ração. A falta de água reduz rapidamente a produção. Deve-se limpar os bebedouros regularmente e monitorar o consumo diário.',
     '# 3. Instalações e ambiente: As instalações devem proporcionar: conforto térmico, boa ventilação (sem correntes de ar), proteção contra predadores e chuva, espaço adequado. No sistema caipira, acesso ao piquete é importante para o bem-estar e comportamento natural.',
+    '# 3.1 Programa de luz artificial: A luz é fundamental para estimular a postura, pois influencia a liberação de hormônios reprodutivos. Recomendações:',
+    '  - **Período total de luz**: 14 a 16 horas por dia (luz natural + artificial) durante a fase de postura.',
+    '  - **Intensidade da luz**: 10 a 20 lux no nível das aves (equivalente a uma lâmpada de 40W incandescente a 2 metros de distância, ou LED equivalente).',
+    '  - **Distribuição uniforme**: As lâmpadas devem ser distribuídas de forma a iluminar todo o galpão uniformemente, evitando áreas escuras.',
+    '  - **Horário fixo**: Manter horários regulares para ligar e desligar a luz artificial, para não causar estresse nas aves (ex: ligar às 5h e desligar às 21h, totalizando 16h de luz).',
+    '  - **Aumento gradual**: Durante a fase de pré-postura (18-22 semanas), aumentar a duração da luz gradualmente de 10-12h para 14-16h, para estimular o início da postura.',
+    '  - **Tipo de lâmpada**: Preferir lâmpadas de luz amarela ou branca quente, que são mais eficazes na estimulação da postura do que luzes frias (azul/verde).',
     '# 4. Manejo dos ninhos: Os ninhos devem ser: limpos, confortáveis, localizados em área tranquila e protegida. Recomenda-se 1 ninho para cada 4-5 aves. A limpeza regular dos ninhos evita ovos sujos e problemas sanitários.',
     '# 5. Coleta de ovos: A coleta deve ser realizada regularmente (2-3 vezes por dia) para: evitar ovos sujos, reduzir quebras, manter qualidade. Os ovos devem ser manuseados com cuidado e armazenados em local adequado.',
     '# 6. Qualidade dos ovos: A qualidade dos ovos depende de: nutrição, saúde das aves, manejo dos ninhos, coleta e armazenamento. Principais parâmetros de qualidade: tamanho, cor da casca, espessura da casca, qualidade do albumen e gema.',
@@ -263,6 +270,7 @@ export const postura: KnowledgeModule = {
     }
   ],
   technicalSources: [
+    'AMARAL, Edilson Sousa do. Galinhas poedeiras: criação em semiconfinamento. 2ª edição. Brasília: EMATER-DF, 2009.',
     'Embrapa Suínos e Aves — Manejo de aves de postura e produção de ovos.',
     'Embrapa Meio-Norte — Criação de galinhas caipiras para produção de ovos.',
     'Manual de Produção de Ovos Caipiras — Associação Brasileira de Avicultura (ABA).',

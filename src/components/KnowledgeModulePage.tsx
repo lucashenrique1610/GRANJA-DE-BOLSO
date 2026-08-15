@@ -7,14 +7,24 @@ interface KnowledgeModulePageProps {
 }
 
 export default function KnowledgeModulePage({ module, onBack }: KnowledgeModulePageProps) {
+  // Determine which fields to use (prefer new structure, fall back to legacy)
+  const objective = module.objectives || (module.objective ? [module.objective] : []);
+  const parameters = module.technicalTables || module.importantParameters || [];
+  const checklist = module.practicalChecklist || module.managementChecklist || [];
+
   const hasContent =
-    module.objective ||
+    module.introduction ||
+    objective.length > 0 ||
+    (module.fundamentalConcepts && module.fundamentalConcepts.length > 0) ||
     module.technicalContent.length > 0 ||
-    module.importantParameters.length > 0 ||
+    parameters.length > 0 ||
     module.bestPractices.length > 0 ||
-    module.commonProblems.length > 0 ||
+    (module.stepByStep && module.stepByStep.length > 0) ||
+    (module.commonProblems && module.commonProblems.length > 0) ||
     module.commonMistakes.length > 0 ||
-    module.managementChecklist.length > 0 ||
+    checklist.length > 0 ||
+    (module.expertTips && module.expertTips.length > 0) ||
+    (module.faq && module.faq.length > 0) ||
     module.technicalSources.length > 0;
 
   return (
@@ -31,10 +41,34 @@ export default function KnowledgeModulePage({ module, onBack }: KnowledgeModuleP
         <p className="app-section-description mt-4">{module.summary}</p>
 
         <div className="mt-8 space-y-10">
-          {module.objective && (
+          {module.introduction && (
             <section>
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">Objetivo</h2>
-              <p className="text-gray-600">{module.objective}</p>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Introdução</h2>
+              <p className="text-gray-600">{module.introduction}</p>
+            </section>
+          )}
+
+          {objective.length > 0 && (
+            <section>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                {objective.length === 1 ? 'Objetivo' : 'Objetivos'}
+              </h2>
+              <ul className="space-y-2 list-disc list-inside text-gray-600">
+                {objective.map((obj, idx) => (
+                  <li key={idx}>{obj}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {module.fundamentalConcepts && module.fundamentalConcepts.length > 0 && (
+            <section>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Conceitos Fundamentais</h2>
+              <ul className="space-y-2 list-disc list-inside text-gray-600">
+                {module.fundamentalConcepts.map((concept, idx) => (
+                  <li key={idx}>{concept}</li>
+                ))}
+              </ul>
             </section>
           )}
 
@@ -49,9 +83,11 @@ export default function KnowledgeModulePage({ module, onBack }: KnowledgeModuleP
             </section>
           )}
 
-          {module.importantParameters.length > 0 && (
+          {parameters.length > 0 && (
             <section>
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">Parâmetros Importantes</h2>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                {module.technicalTables ? 'Tabelas Técnicas' : 'Parâmetros Importantes'}
+              </h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -63,7 +99,7 @@ export default function KnowledgeModulePage({ module, onBack }: KnowledgeModuleP
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {module.importantParameters.map((param, idx) => (
+                    {parameters.map((param, idx) => (
                       <tr key={idx}>
                         <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-800">{param.name}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">{param.unit || '-'}</td>
@@ -90,12 +126,23 @@ export default function KnowledgeModulePage({ module, onBack }: KnowledgeModuleP
             </section>
           )}
 
-          {module.commonProblems.length > 0 && (
+          {module.stepByStep && module.stepByStep.length > 0 && (
+            <section>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Passo a Passo</h2>
+              <ol className="space-y-2 list-decimal list-inside text-gray-600">
+                {module.stepByStep.map((step, idx) => (
+                  <li key={idx}>{step}</li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          {module.commonProblems && module.commonProblems.length > 0 && (
             <section>
               <h2 className="text-xl font-semibold text-gray-800 mb-4">Problemas e Soluções</h2>
               <div className="space-y-4">
                 {module.commonProblems.map((problem, idx) => (
-                  <div key={idx} className="rounded-lg border border-gray-200 p-4">
+                  <div key={idx} className="rounded-xl border border-gray-200 p-5">
                     <h3 className="font-medium text-gray-800 mb-2">{problem.problem}</h3>
                     <div className="mb-2">
                       <p className="text-sm font-medium text-gray-600 mb-1">Possíveis Causas:</p>
@@ -130,9 +177,11 @@ export default function KnowledgeModulePage({ module, onBack }: KnowledgeModuleP
             </section>
           )}
 
-          {module.managementChecklist.length > 0 && (
+          {checklist.length > 0 && (
             <section>
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">Checklist de Manejo</h2>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">
+                {module.practicalChecklist ? 'Checklist Prático' : 'Checklist de Manejo'}
+              </h2>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -144,7 +193,7 @@ export default function KnowledgeModulePage({ module, onBack }: KnowledgeModuleP
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {module.managementChecklist.map((item, idx) => (
+                    {checklist.map((item, idx) => (
                       <tr key={idx}>
                         <td className="px-4 py-3 text-sm text-gray-800">{item.item}</td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-600">{item.frequency}</td>
@@ -160,6 +209,31 @@ export default function KnowledgeModulePage({ module, onBack }: KnowledgeModuleP
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </section>
+          )}
+
+          {module.expertTips && module.expertTips.length > 0 && (
+            <section>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Dicas do Especialista</h2>
+              <ul className="space-y-2 list-disc list-inside text-gray-600">
+                {module.expertTips.map((tip, idx) => (
+                  <li key={idx}>{tip}</li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {module.faq && module.faq.length > 0 && (
+            <section>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">Perguntas Frequentes</h2>
+              <div className="space-y-4">
+                {module.faq.map((faq, idx) => (
+                  <div key={idx} className="rounded-xl border border-gray-200 p-5">
+                    <h3 className="font-medium text-gray-800 mb-2">{faq.question}</h3>
+                    <p className="text-gray-600">{faq.answer}</p>
+                  </div>
+                ))}
               </div>
             </section>
           )}
